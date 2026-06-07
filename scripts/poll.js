@@ -71,9 +71,9 @@ async function scanLaunch(mint) {
       if (w === dev || seen[w]) continue;
       seen[w] = true;
       buyers.push({ wallet: w, ts: tx.timestamp, qty: Number(tt.tokenAmount) || 0 });
-      if (buyers.length >= 30) break;
+      if (buyers.length >= 50) break;
     }
-    if (buyers.length >= 30) break;
+    if (buyers.length >= 50) break;
   }
   const firstTs = buyers.length ? buyers[0].ts : launchTs;
   buyers.forEach((b, i) => { b.rank = i + 1; b.sniper = (b.ts - firstTs) <= 2; });
@@ -94,30 +94,69 @@ async function initCoin(coin) {
 
 async function checkCoin(coin) {
   const mint = coin.mint;
+  const nowSec = Math.floor(Date.now() / 1000);
   const positions = await sb(`positions?mint=eq.${mint}&select=*`);
-  const newlyExited = [];
+
+  const ebRows = await sb(`early_buyers?mint=eq.${mint}&select=wallet,entry_ts,rank`);
+  const entryTs = {}, rankOf = {};
+  (ebRows || []).forEach(r => { entryTs[r.wallet] = r.entry_ts; rankOf[r.wallet] = r.rank; });
+
+  const newlyExited = [];  // {w, rank}
+  const partialNow = [];   // {w, pct, rank}
+
   for (const pos of positions) {
     const bal = await currentBal(pos.wallet, mint);
     if (bal == null) continue;
     const pct = pos.entry_qty > 0 ? Math.max(0, (1 - bal / pos.entry_qty)) * 100 : 0;
     const exited = bal < pos.entry_qty * 0.05;
-    await sb(`positions?id=eq.${pos.id}`, { method: "PATCH", prefer: "return=minimal", body: { current_qty: bal, pct_exited: pct, exited, last_checked: new Date().toISOString() } });
-    if (exited && !pos.exited) newlyExited.push(pos.wallet);
+    const rank = rankOf[pos.wallet] || 999;
+
+    if (!exited && (pos.pct_exited || 0) < 50 && pct >= 50) partialNow.push({ w: pos.wallet, pct, rank });
+
+    await sb(`positions?id=eq.${pos.id}`, { method: "PATCH", prefer: "return=minimal",
+      body: { current_qty: bal, pct_exited: pct, exited, last_checked: new Date().toISOString() } });
+
+    if (exited && !pos.exited) {
+      newlyExited.push({ w: pos.wallet, rank });
+      const prior = await sb(`trades?wallet=eq.${pos.wallet}&mint=eq.${mint}&select=id&limit=1`);
+      if (!prior || !prior.length) {
+        const bts = entryTs[pos.wallet] || null;
+        await sb("trades", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal",
+          body: { wallet: pos.wallet, mint, buy_ts: bts, sell_ts: nowSec, hold_secs: bts ? (nowSec - bts) : null, pct_sold: pct } });
+      }
+    }
   }
-  for (const w of newlyExited) {
-    await tg(`🔴 <b>Early wallet EXITED</b>\n${coin.symbol || short(mint)}\n${short(w)} ne bag bech diya\nhttps://solscan.io/account/${w}`);
-    await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, wallet: w, kind: "wallet_exit" } });
+
+  const name = coin.symbol || short(mint);
+
+  // individual alerts: ONLY top 10 early wallets (noise control)
+  for (const e of newlyExited.filter(x => x.rank <= 10)) {
+    await tg(`🔴 <b>Top-${e.rank} early wallet EXITED</b>\n${name}\n${short(e.w)} ne pura bag bech diya\nhttps://solscan.io/account/${e.w}`);
+    await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, wallet: e.w, kind: "wallet_exit" } });
   }
+  for (const p of partialNow.filter(x => x.rank <= 10)) {
+    await tg(`🟠 <b>Top-${p.rank} early wallet selling</b>\n${name}\n${short(p.w)} ne ~${Math.round(p.pct)}% bech diya`);
+    await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, wallet: p.w, kind: "partial50" } });
+  }
+
+  // DUMP: 3+ of TOP 10 early wallets exited in one check
+  const top10Exited = newlyExited.filter(x => x.rank <= 10).length;
+  if (top10Exited >= 3) {
+    await tg(`⚡ <b>DUMP DETECTED</b>\n${name}\nTop-10 early wallets mein se ${top10Exited} ek saath nikal gaye — abhi!`);
+    await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, kind: "velocity" } });
+  }
+
+  // aggregate threshold across all 50 tracked (one-time)
   const total = positions.length;
   const exitedNow = positions.filter(p => p.exited).length + newlyExited.length;
   if (total > 0 && (exitedNow / total) * 100 >= 30) {
     const prior = await sb(`alerts_sent?mint=eq.${mint}&kind=eq.threshold&select=id`);
     if (!prior || !prior.length) {
-      await tg(`⚠️ <b>${Math.round((exitedNow / total) * 100)}% early money EXITED</b>\n${coin.symbol || short(mint)}\nSmart/early wallets nikal rahe — dhyan se.`);
+      await tg(`⚠️ <b>${Math.round((exitedNow / total) * 100)}% early money EXITED</b>\n${name}\nSmart/early wallets nikal rahe — dhyan se.`);
       await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, kind: "threshold" } });
     }
   }
-  console.log(`checked ${mint}: ${newlyExited.length} new exits`);
+  console.log(`checked ${mint}: ${newlyExited.length} exits (${top10Exited} top10), ${partialNow.length} partial`);
 }
 
 (async () => {
