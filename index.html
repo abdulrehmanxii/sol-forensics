@@ -152,6 +152,7 @@
     <button class="mode on" data-m="wallet" onclick="setMode('wallet')">Wallet + PnL</button>
     <button class="mode" data-m="token" onclick="setMode('token')">Token Rug-Scan</button>
     <button class="mode" data-m="launch" onclick="setMode('launch')">Launch / Early Buyers</button>
+    <button class="mode" data-m="feed" onclick="setMode('feed')">Live Feed</button>
     <button class="mode" data-m="trace" onclick="setMode('trace')">Fund-Flow Trace</button>
     <button class="mode" data-m="watch" onclick="setMode('watch')">Live Watch</button>
   </div>
@@ -302,9 +303,11 @@ function renderControls(){
     $("controls").innerHTML=`<div class="field"><span class="ic">🚀</span><input id="addr" placeholder="Token mint address (fresh launch best)"/><button class="go" id="goBtn">SCAN</button></div>`;
   else if(mode==="trace")
     $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="addr" placeholder="Start wallet address"/><select id="depth"><option value="2">2 hops</option><option value="3" selected>3 hops</option><option value="4">4 hops</option><option value="5">5 hops</option></select><button class="go" id="goBtn">TRACE</button></div>`;
-  $("goBtn").onclick=run;
-  $("addr").addEventListener("keydown",e=>{if(e.key==="Enter")run();  renderHistory(mode);
-});
+  else if(mode==="feed")
+    $("controls").innerHTML=`<div class="field"><span class="ic">🟢</span><input id="fSearch" placeholder="naam/symbol (optional)"/><button class="go" onclick="runFeed()">LOAD</button></div><div style="display:flex;gap:8px;margin-bottom:6px"><div class="field" style="flex:1;margin:0"><span class="ic">📊</span><input id="fMcap" type="number" placeholder="min mcap (SOL)"/></div><div class="field" style="flex:1;margin:0"><span class="ic">💰</span><input id="fBuy" type="number" placeholder="min dev buy (SOL)"/></div></div>`;
+  const gb=$("goBtn"); if(gb) gb.onclick=run;
+  const ad=$("addr"); if(ad) ad.addEventListener("keydown",e=>{if(e.key==="Enter")run();});
+  renderHistory(mode);
 }
 function busy(b){const x=$("goBtn");if(!x)return;x.disabled=b;x.innerHTML=b?'<span class="spin"></span>':(mode==="watch"?"WATCH":mode==="trace"?"TRACE":"SCAN");}
 async function run(){
@@ -659,6 +662,42 @@ function renderHistory(mode){
   box.innerHTML=`<div class="histwrap"><div class="histhd"><span>Recent (${mode})</span><button onclick="clearHist('${mode}')">clear all</button></div>`+
     arr.map(e=>`<div class="histrow"><span class="histq" onclick="pickHist('${e.q}')">${short(e.q,6)}</span><button class="histx" onclick="delHist('${mode}','${e.q}')">\u2715</button></div>`).join("")+`</div>`;
 }
+
+function timeAgo(iso){const x=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(x<60)return x+"s";if(x<3600)return Math.floor(x/60)+"m";return Math.floor(x/3600)+"h";}
+window.runFeed=async function(){
+  if(!ACCESS()){showErr("Access code daalo.");return;}
+  showErr("");prog("Loading live feed...");
+  const body={search:($("fSearch")?$("fSearch").value.trim():""),minMcap:($("fMcap")?$("fMcap").value:0),minDevBuy:($("fBuy")?$("fBuy").value:0),limit:60};
+  try{
+    const res=await fetch("/api/feed",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify(body)});
+    const j=await res.json();
+    if(!res.ok)throw new Error(j.error||("Error "+res.status));
+    renderFeed(j);
+  }catch(e){showErr(e.message||"feed fail");}
+  finally{prog("");}
+};
+function renderFeed(rows){
+  if(!rows||!rows.length){$("out").innerHTML='<div class="empty">Koi coin nahi mila. Filter loosen karo, ya listener chal raha confirm karo.</div>';return;}
+  let h=`<div class="card"><div class="h cy">\U0001F7E2 LIVE FEED <span class="mut" style="font-weight:400;font-size:10px">\u2014 ${rows.length} coins \u00B7 newest first</span></div>`;
+  rows.forEach(t=>{
+    const sy=(t.symbol||"").replace(/['"\\]/g,"");
+    h+=`<div class="holder">
+      <a class="tok" href="${tokUrl(t.mint)}" target="_blank">${esc(sy||short(t.mint,5))}</a>
+      <span class="mut" style="font-size:10px">${esc((t.name||"").slice(0,16))}</span>
+      <span class="mut" style="font-size:10px">mc ${t.market_cap_sol!=null?fmt(t.market_cap_sol,1):'?'}\u25CE \u00B7 dev ${t.initial_buy_sol!=null?fmt(t.initial_buy_sol,2):'?'}\u25CE \u00B7 ${t.created_at?timeAgo(t.created_at):''}</span>
+      <button class="badge buy" style="margin-left:auto;cursor:pointer;border:0;padding:3px 8px" onclick="feedTrack('${t.mint}','${sy}',this)">+ TRACK</button>
+    </div>`;
+  });
+  h+=`</div>`;
+  $("out").innerHTML=h;
+}
+window.feedTrack=async function(mint,symbol,btn){
+  try{btn.textContent="...";
+    const res=await fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify({mint,symbol})});
+    const j=await res.json();if(!res.ok)throw new Error(j.error||res.status);
+    btn.textContent="\u2713 TRACKING";btn.disabled=true;
+  }catch(e){btn.textContent="fail";}
+};
 
 /* boot */
 renderKeyField();renderControls();
