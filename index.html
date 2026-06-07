@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SOL Forensics Pro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ===================================================================
+   SOL FORENSICS PRO  —  built by Abdul Rehman
+<
+=================================================================== */
+  :root{
+    --bg:#06070a;--bg2:#0b0d12;--card:#101319;--card2:#181c25;--line:#1f242e;
+    --txt:#e6e9ef;--mut:#7a8290;--dim:#4b5260;
+    --em:#2dd4a7;--cy:#22d3ee;--sky:#38bdf8;--vio:#a78bfa;--rose:#fb7185;--amb:#fbbf24;--red:#f43f5e;
+    --glow:0 0 0 1px rgba(45,212,167,.18),0 0 22px -6px rgba(45,212,167,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:
+      radial-gradient(1100px 500px at 15% -10%, rgba(34,211,238,.07), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(167,139,250,.06), transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--txt);font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+    padding:18px 14px 40px;min-height:100vh;
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:radial-gradient(rgba(255,255,255,.025) 1px,transparent 1px);background-size:22px 22px;}
+  .wrap{max-width:920px;margin:0 auto;position:relative;z-index:1;}
+
+  .hd{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+  .logo{height:46px;width:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;
+    background:linear-gradient(150deg,rgba(45,212,167,.18),rgba(34,211,238,.1));border:1px solid rgba(45,212,167,.35);box-shadow:var(--glow);}
+  h1{font-family:"Chakra Petch",sans-serif;font-size:22px;margin:0;letter-spacing:.5px;font-weight:700;
+    background:linear-gradient(90deg,#fff,#7fe9d2);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .sub{font-size:11px;color:var(--mut);letter-spacing:.3px;margin-top:2px;}
+
+  .modes{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;}
+  .mode{font-family:"Chakra Petch",sans-serif;background:var(--card);border:1px solid var(--line);color:var(--mut);
+    font-size:12px;font-weight:600;letter-spacing:.4px;padding:9px 16px;border-radius:10px;cursor:pointer;transition:.15s;}
+  .mode:hover{color:var(--txt);border-color:#2c3340;}
+  .mode.on{color:#06070a;border-color:transparent;background:linear-gradient(120deg,var(--em),var(--cy));box-shadow:var(--glow);}
+
+  .field{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 14px;margin-bottom:10px;transition:.15s;}
+  .field:focus-within{border-color:rgba(45,212,167,.5);box-shadow:var(--glow);}
+  .field .ic{font-size:14px;opacity:.7;}
+  .field input,.field select{background:transparent;border:0;outline:0;color:var(--txt);flex:1;font:inherit;font-size:13px;min-width:0;}
+  .field input::placeholder{color:var(--dim);}
+  .field select{cursor:pointer;flex:0 0 auto;}
+  .field select option{background:var(--card);}
+  button.go{font-family:"Chakra Petch",sans-serif;background:linear-gradient(120deg,var(--em),var(--cy));color:#06070a;font-weight:700;letter-spacing:.5px;
+    border:0;border-radius:8px;padding:8px 18px;font-size:12px;cursor:pointer;white-space:nowrap;}
+  button.go:disabled{opacity:.55;cursor:default;}
+
+  .err{display:flex;gap:8px;color:var(--amb);background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px;}
+  .prog{font-size:11px;color:var(--cy);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+  @media(max-width:560px){.grid4{grid-template-columns:repeat(2,1fr);}}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;position:relative;overflow:hidden;}
+  .stat::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--em),transparent);opacity:.5;}
+  .stat .lbl{font-size:10px;color:var(--mut);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+  .stat .val{font-family:"Chakra Petch",sans-serif;font-size:17px;font-weight:700;}
+
+  .meta{font-size:11px;color:var(--mut);display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+  .meta a{color:var(--mut);text-decoration:none;} .meta a:hover{color:var(--em);}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px;margin-bottom:14px;}
+  .card .h{font-family:"Chakra Petch",sans-serif;font-size:12px;font-weight:600;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;overflow-x:auto;}
+  .tab{font-family:"Chakra Petch",sans-serif;background:none;border:0;border-bottom:2px solid transparent;color:var(--mut);font-size:12px;font-weight:600;padding:9px 13px;cursor:pointer;white-space:nowrap;margin-bottom:-1px;}
+  .tab.on{color:var(--em);border-bottom-color:var(--em);}
+  .tab .cnt{background:var(--card2);border-radius:10px;padding:1px 7px;font-size:10px;margin-left:5px;}
+
+  .list{display:flex;flex-direction:column;gap:7px;}
+  .row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12px;transition:.12s;}
+  .row:hover{border-color:#2c3340;}
+  .row .l{flex:1;min-width:0;} .row .r{text-align:right;white-space:nowrap;}
+  .row .t{font-size:10px;color:var(--dim);width:64px;text-align:right;}
+  .row a.ext,.meta a.ext{color:var(--dim);text-decoration:none;} .row a.ext:hover{color:var(--em);}
+  .src{font-size:9px;text-transform:uppercase;color:var(--mut);background:var(--card2);padding:2px 7px;border-radius:5px;letter-spacing:.5px;}
+  a.tok{color:var(--txt);text-decoration:none;} a.tok:hover{color:var(--em);text-decoration:underline;}
+
+  .flag{display:flex;align-items:center;gap:9px;font-size:12px;padding:9px 11px;border-radius:9px;margin-bottom:7px;}
+  .flag .fi{font-weight:700;width:14px;text-align:center;}
+  .flag.bad{background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.28);color:#fda4af;}
+  .flag.ok{background:rgba(45,212,167,.07);border:1px solid rgba(45,212,167,.22);color:#7fe9d2;}
+  .flag.warn{background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.22);color:#fcd34d;}
+  .verdict{font-family:"Chakra Petch",sans-serif;font-size:26px;font-weight:700;letter-spacing:1px;}
+
+  .holder{display:flex;align-items:center;gap:9px;font-size:12px;padding:8px 0;border-bottom:1px solid rgba(31,36,46,.6);}
+  .holder:last-child{border:0;}
+  .badge{font-size:9px;padding:2px 6px;border-radius:5px;font-weight:700;letter-spacing:.5px;}
+  .badge.fresh{background:rgba(251,191,36,.16);color:var(--amb);}
+  .badge.buy{background:rgba(45,212,167,.16);color:var(--em);}
+  .badge.air{background:rgba(244,63,94,.16);color:#fda4af;}
+  .ring{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--card2);border:1px solid var(--line);flex:0 0 auto;}
+  .ring.sm{width:26px;height:26px;font-size:10px;}
+  .hwrap{border-bottom:1px solid rgba(31,36,46,.6);}
+  .hwrap:last-child{border:0;}
+  .hrow{display:flex;align-items:center;gap:9px;font-size:12px;padding:9px 0;cursor:pointer;flex-wrap:wrap;}
+  .hrow:hover{background:rgba(255,255,255,.02);}
+  .emoji{font-size:14px;}
+  .pct{color:var(--cy);}
+  .chev{margin-left:auto;color:var(--mut);font-size:13px;}
+  .hbody{padding:2px 0 10px 36px;}
+  .hbal{font-size:11px;color:var(--mut);margin-bottom:7px;}
+  .hitem{font-size:12px;padding:2px 0;}
+
+  .node{display:flex;align-items:center;gap:9px;padding:8px 0;font-size:12px;}
+  .empty,.hint{text-align:center;color:var(--dim);font-size:12px;padding:22px 0;}
+
+  .em{color:var(--em)}.cy{color:var(--cy)}.sky{color:var(--sky)}.vio{color:var(--vio)}.rose{color:var(--rose)}.mut{color:var(--mut)}.red{color:var(--red)}.amb{color:var(--amb)}.b{font-weight:700}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .6s linear infinite;}
+  @keyframes s{to{transform:rotate(360deg);}}
+  .pulse{width:8px;height:8px;border-radius:50%;background:var(--em);box-shadow:0 0 0 0 rgba(45,212,167,.6);animation:p 1.6s infinite;}
+  @keyframes p{0%{box-shadow:0 0 0 0 rgba(45,212,167,.5)}70%{box-shadow:0 0 0 8px rgba(45,212,167,0)}100%{box-shadow:0 0 0 0 rgba(45,212,167,0)}}
+
+  footer{margin-top:30px;text-align:center;font-size:11px;color:var(--mut);border-top:1px solid var(--line);padding-top:16px;}
+  footer b{color:var(--txt);font-family:"Chakra Petch",sans-serif;letter-spacing:.5px;}
+  footer .tg{display:inline-flex;align-items:center;gap:6px;margin-top:6px;color:var(--cy);text-decoration:none;}
+  footer .tg:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <div class="logo">◎</div>
+    <div><h1>SOL FORENSICS PRO</h1><div class="sub">wallet PnL · token rug-scan · fund-flow trace · live watch</div></div>
+  </div>
+
+  <div id="keyField"></div>
+
+  <div class="modes">
+    <button class="mode on" data-m="wallet" onclick="setMode('wallet')">Wallet + PnL</button>
+    <button class="mode" data-m="token" onclick="setMode('token')">Token Rug-Scan</button>
+    <button class="mode" data-m="launch" onclick="setMode('launch')">Launch / Early Buyers</button>
+    <button class="mode" data-m="trace" onclick="setMode('trace')">Fund-Flow Trace</button>
+    <button class="mode" data-m="watch" onclick="setMode('watch')">Live Watch</button>
+  </div>
+
+  <div id="controls"></div>
+  <div id="err"></div>
+  <div id="prog"></div>
+  <div id="out"></div>
+
+  <footer>
+    Built by <b>Abdul Rehman</b>
+    <br>
+    <a class="tg" href="https://t.me/+923122927855" target="_blank">✈ Telegram: +92 312 2927855</a>
+  </footer>
+</div>
+
+<script>
+/* ===== DATA LAYER: same-origin proxy (/api/helius). Key server par hai. ===== */
+
+const SPL="TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const T22="TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+const KNOWN={"So11111111111111111111111111111111111111112":"SOL","EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v":"USDC","Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB":"USDT"};
+let symbols={...KNOWN};
+let priceMap={};
+let mode="wallet";
+
+const $=id=>document.getElementById(id);
+const short=(s,n=4)=>s?s.slice(0,n)+"..."+s.slice(-n):"";
+const fmt=(n,d=4)=>(n==null||isNaN(n))?"0":Number(n).toLocaleString("en-US",{maximumFractionDigits:d});
+const usd=n=>(n==null||isNaN(n))?"":"$"+Number(n).toLocaleString("en-US",{maximumFractionDigits:n<1?4:2});
+function cusd(n){if(n==null||isNaN(n)||n<=0)return "";const a=Math.abs(n);if(a>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(a>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+n.toFixed(0);}
+const dt=t=>t?new Date(t*1000).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"";
+const sym=m=>symbols[m]||short(m,4);
+const txUrl=s=>`https://solscan.io/tx/${s}`,accUrl=a=>`https://solscan.io/account/${a}`,tokUrl=m=>`https://solscan.io/token/${m}`;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ACCESS=()=>(($("acc")&&$("acc").value.trim())||localStorage.getItem("sfp_access")||"");
+
+function renderKeyField(){
+  $("keyField").innerHTML=`<div class="field"><span class="ic">🔒</span><input id="acc" type="password" placeholder="Access code"/></div>`;
+  $("acc").value=localStorage.getItem("sfp_access")||"";
+  $("acc").addEventListener("change",e=>localStorage.setItem("sfp_access",e.target.value.trim()));
+}
+function showErr(m){$("err").innerHTML=m?`<div class="err">⚠️ <span>${esc(m)}</span></div>`:"";}
+function prog(m){$("prog").innerHTML=m?`<div class="prog"><span class="spin"></span>${esc(m)}</div>`:"";}
+
+async function rpc(method,params){
+  const res=await fetch("/api/helius",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify({type:"rpc",method,params})});
+  if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.error||`RPC ${res.status}`);}
+  const j=await res.json(); if(j.error) throw new Error(j.error.message||"RPC error"); return j.result;
+}
+async function enhTx(addr,before){
+  const res=await fetch("/api/helius",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify({type:"enh",address:addr,before})});
+  if(!res.ok){const j=await res.json().catch(()=>({}));throw new Error(j.error||`API ${res.status}`);}
+  const a=await res.json(); if(!Array.isArray(a)) throw new Error("Galat response. Address check karo."); return a;
+}
+async function mapLimit(arr,limit,fn){const out=[];let i=0;const w=Array(Math.min(limit,arr.length||1)).fill(0).map(async()=>{while(i<arr.length){const idx=i++;try{out[idx]=await fn(arr[idx],idx);}catch(e){out[idx]=null;}}});await Promise.all(w);return out;}
+async function resolveSymbols(mints){
+  const need=[...new Set(mints)].filter(m=>m&&!symbols[m]);
+  for(let i=0;i<need.length;i+=80){
+    const chunk=need.slice(i,i+80);
+    try{
+      const r=await rpc("getAssetBatch",{ids:chunk});
+      (r||[]).forEach((a,idx)=>{
+        if(!a)return;
+        const md=(a.content&&a.content.metadata)||{};
+        const ti=a.token_info||{};
+        const sm=md.symbol||ti.symbol||md.name;
+        if(sm)symbols[chunk[idx]]=sm;
+        const pp=ti.price_info&&ti.price_info.price_per_token;
+        if(pp!=null)priceMap[chunk[idx]]=Number(pp);
+      });
+    }catch(_){}
+  }
+}
+async function getPrices(mints){
+  const out={};const need=[];
+  [...new Set(mints)].filter(Boolean).forEach(m=>{if(priceMap[m]!=null)out[m]=priceMap[m];else need.push(m);});
+  if(need.length){try{const r=await fetch(`https://lite-api.jup.ag/price/v2?ids=${need.slice(0,40).join(",")}`);if(r.ok){const j=await r.json();const d=j.data||{};for(const k in d){if(d[k]&&d[k].price){out[k]=Number(d[k].price);priceMap[k]=out[k];}}}}catch(_){}}
+  return out;
+}
+
+function parseTxns(txns,W){
+  const bought=[],sold=[],sent=[];let solSpent=0,solReceived=0,solSent=0;
+  for(const tx of txns){
+    const isSwap=tx.type==="SWAP"||(tx.events&&tx.events.swap);
+    let nc=0;for(const nt of tx.nativeTransfers||[]){if(nt.toUserAccount===W)nc+=nt.amount;if(nt.fromUserAccount===W)nc-=nt.amount;}nc/=1e9;
+    const tc={};for(const tt of tx.tokenTransfers||[]){const a=Number(tt.tokenAmount)||0;if(tt.toUserAccount===W)tc[tt.mint]=(tc[tt.mint]||0)+a;if(tt.fromUserAccount===W)tc[tt.mint]=(tc[tt.mint]||0)-a;}
+    if(isSwap){
+      for(const[mint,d]of Object.entries(tc)){
+        if(KNOWN[mint]==="SOL")continue;
+        if(d>0){const cost=nc<0?Math.abs(nc):0;bought.push({sig:tx.signature,ts:tx.timestamp,mint,qty:d,sol:cost,src:tx.source});solSpent+=cost;}
+        else if(d<0){const p=nc>0?nc:0;sold.push({sig:tx.signature,ts:tx.timestamp,mint,qty:Math.abs(d),sol:p,src:tx.source});solReceived+=p;}
+      }
+    }else{
+      for(const nt of tx.nativeTransfers||[]){if(nt.fromUserAccount===W&&nt.toUserAccount&&nt.toUserAccount!==W){const a=nt.amount/1e9;sent.push({sig:tx.signature,ts:tx.timestamp,to:nt.toUserAccount,asset:"SOL",amount:a,isToken:false});solSent+=a;}}
+      for(const tt of tx.tokenTransfers||[]){if(tt.fromUserAccount===W&&tt.toUserAccount&&tt.toUserAccount!==W){sent.push({sig:tx.signature,ts:tx.timestamp,to:tt.toUserAccount,asset:tt.mint,amount:Number(tt.tokenAmount)||0,isToken:true});}}
+    }
+  }
+  return {bought,sold,sent,totals:{solSpent,solReceived,solSent}};
+}
+function topRecip(sent){const m={};sent.forEach(s=>{if(!s.isToken)m[s.to]=(m[s.to]||0)+s.amount;});return Object.entries(m).map(([to,sol])=>({to,sol,count:sent.filter(s=>s.to===to).length})).sort((a,b)=>b.sol-a.sol);}
+function computePnL(bought,sold){
+  const tok={};
+  bought.forEach(b=>{const t=tok[b.mint]||(tok[b.mint]={qtyB:0,solIn:0,qtyS:0,solOut:0});t.qtyB+=b.qty;t.solIn+=b.sol;});
+  sold.forEach(s=>{const t=tok[s.mint]||(tok[s.mint]={qtyB:0,solIn:0,qtyS:0,solOut:0});t.qtyS+=s.qty;t.solOut+=s.sol;});
+  const rows=[];let totalReal=0,wins=0,closed=0;
+  for(const[mint,t]of Object.entries(tok)){
+    const avgCost=t.qtyB>0?t.solIn/t.qtyB:0,soldQ=Math.min(t.qtyS,t.qtyB),costOfSold=avgCost*soldQ,realized=t.solOut-costOfSold,isClosed=t.qtyS>0;
+    if(isClosed){closed++;if(realized>0)wins++;totalReal+=realized;}
+    rows.push({mint,qtyB:t.qtyB,qtyS:t.qtyS,realized,held:Math.max(0,t.qtyB-t.qtyS),isClosed});
+  }
+  rows.sort((a,b)=>b.realized-a.realized);
+  return {rows,totalReal,winRate:closed?wins/closed*100:0,closed,traded:rows.length};
+}
+
+/* holdings: SOL balance + SPL tokens (qty + USD) */
+async function getHoldings(W){
+  const [bal,spl,t22]=await Promise.all([
+    rpc("getBalance",[W]).catch(()=>null),
+    rpc("getTokenAccountsByOwner",[W,{programId:SPL},{encoding:"jsonParsed"}]).catch(()=>null),
+    rpc("getTokenAccountsByOwner",[W,{programId:T22},{encoding:"jsonParsed"}]).catch(()=>null),
+  ]);
+  const solLamports=bal&&bal.value!=null?bal.value:(typeof bal==="number"?bal:0);
+  const sol=solLamports/1e9;
+  const accts=[...((spl&&spl.value)||[]),...((t22&&t22.value)||[])];
+  let tokens=accts.map(a=>{const i=a.account.data.parsed.info;return {mint:i.mint,qty:i.tokenAmount.uiAmount||0};}).filter(t=>t.qty>0);
+  const mm={};tokens.forEach(t=>mm[t.mint]=(mm[t.mint]||0)+t.qty);
+  tokens=Object.entries(mm).map(([mint,qty])=>({mint,qty}));
+  await resolveSymbols(tokens.map(t=>t.mint));
+  const prices=await getPrices([...tokens.map(t=>t.mint),"So11111111111111111111111111111111111111112"]);
+  const solPrice=prices["So11111111111111111111111111111111111111112"]||null;
+  tokens.forEach(t=>{t.price=prices[t.mint]||null;t.value=t.price?t.qty*t.price:null;});
+  tokens.sort((a,b)=>(b.value||0)-(a.value||0));
+  const tokenValue=tokens.reduce((s,t)=>s+(t.value||0),0);
+  const solValue=solPrice?sol*solPrice:null;
+  return {sol,solValue,solPrice,tokens,tokenValue,total:(solValue||0)+tokenValue};
+}
+
+/* ============ controls / mode ============ */
+function setMode(m){mode=m;document.querySelectorAll(".mode").forEach(b=>b.classList.toggle("on",b.dataset.m===m));if(watchTimer){clearInterval(watchTimer);watchTimer=null;}$("out").innerHTML="";showErr("");prog("");renderControls();}
+function renderControls(){
+  if(mode==="wallet"||mode==="watch")
+    $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="addr" placeholder="Solana wallet address"/><button class="go" id="goBtn">${mode==="watch"?"WATCH":"SCAN"}</button></div>`;
+  else if(mode==="token")
+    $("controls").innerHTML=`<div class="field"><span class="ic">🪙</span><input id="addr" placeholder="Token mint address"/><button class="go" id="goBtn">SCAN</button></div>`;
+  else if(mode==="launch")
+    $("controls").innerHTML=`<div class="field"><span class="ic">🚀</span><input id="addr" placeholder="Token mint address (fresh launch best)"/><button class="go" id="goBtn">SCAN</button></div>`;
+  else if(mode==="trace")
+    $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="addr" placeholder="Start wallet address"/><select id="depth"><option value="2">2 hops</option><option value="3" selected>3 hops</option><option value="4">4 hops</option><option value="5">5 hops</option></select><button class="go" id="goBtn">TRACE</button></div>`;
+  $("goBtn").onclick=run;
+  $("addr").addEventListener("keydown",e=>{if(e.key==="Enter")run();});
+}
+function busy(b){const x=$("goBtn");if(!x)return;x.disabled=b;x.innerHTML=b?'<span class="spin"></span>':(mode==="watch"?"WATCH":mode==="trace"?"TRACE":"SCAN");}
+async function run(){
+  showErr("");prog("");
+  if(!ACCESS()){showErr("Access code daalo (owner se lo).");return;}
+  const addr=$("addr").value.trim();if(!addr){showErr("Address daalo.");return;}
+  busy(true);
+  try{
+    if(mode==="wallet")await runWallet(addr);
+    else if(mode==="token")await runToken(addr);
+    else if(mode==="launch")await runLaunch(addr);
+    else if(mode==="trace")await runTrace(addr);
+    else if(mode==="watch")await runWatch(addr);
+  }catch(e){showErr(e.message||"Kuch ghalat ho gaya.");}
+  finally{busy(false);prog("");}
+}
+
+/* ============ WALLET + PnL ============ */
+async function runWallet(W){
+  prog("Scanning transactions (deep)...");
+  let all=[],before=null,pages=0;
+  while(pages<5){const b=await enhTx(W,before);all=all.concat(b);pages++;if(b.length<100)break;before=b[b.length-1].signature;prog(`Scanning... ${all.length} txns`);}
+  const p=parseTxns(all,W);await resolveSymbols([...p.bought,...p.sold].map(x=>x.mint));
+  const pnl=computePnL(p.bought,p.sold);
+  renderWallet(W,all.length,p,pnl);
+}
+function renderWallet(W,scanned,p,pnl){
+  const T=p.totals,recips=topRecip(p.sent),pc=pnl.totalReal>=0?"em":"rose";
+  let h=`<div class="grid4">
+    <div class="stat"><div class="lbl">Realized PnL</div><div class="val ${pc}">${pnl.totalReal>=0?"+":""}${fmt(pnl.totalReal,2)} \u25CE</div></div>
+    <div class="stat"><div class="lbl">Win Rate</div><div class="val ${pnl.winRate>=50?'em':'amb'}">${fmt(pnl.winRate,0)}%</div></div>
+    <div class="stat"><div class="lbl">Tokens Traded</div><div class="val">${pnl.traded}</div></div>
+    <div class="stat"><div class="lbl">SOL Sent Out</div><div class="val vio">${fmt(T.solSent,2)} \u25CE</div></div>
+  </div>`;
+  h+=`<div class="meta"><a class="ext" href="${accUrl(W)}" target="_blank">${short(W,6)} \u2197</a><span style="margin-left:auto">${scanned} txns \u00B7 ${pnl.closed} closed positions</span></div>`;
+  h+=`<div class="card"><div class="h em">\uD83D\uDCB0 PnL PER TOKEN <span class="mut" style="font-weight:400;font-size:10px">(avg-cost)</span></div>`;
+  if(!pnl.rows.length)h+=`<div class="empty">No swaps found.</div>`;
+  pnl.rows.slice(0,25).forEach(r=>{const c=r.realized>=0?"em":"rose";
+    h+=`<div class="holder"><a class="tok" href="${tokUrl(r.mint)}" target="_blank">${esc(sym(r.mint))}</a>
+      <span class="mut" style="font-size:10px">${r.isClosed?"closed":"holding "+fmt(r.held,2)}</span>
+      <span style="margin-left:auto" class="${c} b">${r.realized>=0?"+":""}${fmt(r.realized,3)} \u25CE</span></div>`;});
+  h+=`</div>`;
+  h+=`<div class="tabs">
+    <button class="tab on" onclick="wTab(event,'b')">Bought<span class="cnt">${p.bought.length}</span></button>
+    <button class="tab" onclick="wTab(event,'s')">Sold<span class="cnt">${p.sold.length}</span></button>
+    <button class="tab" onclick="wTab(event,'t')">Sent<span class="cnt">${p.sent.length}</span></button></div>`;
+  h+=`<div id="wb" class="list">`+(p.bought.length?p.bought.map(b=>row(b.ts,b.sig,b.src,`<span class="em b">+${fmt(b.qty)}</span> <a class="tok" href="${tokUrl(b.mint)}" target="_blank">${esc(sym(b.mint))}</a>`,b.sol?`<span class="mut">\u2212${fmt(b.sol,3)} \u25CE</span>`:"")).join(""):'<div class="empty">none</div>')+`</div>`;
+  h+=`<div id="ws" class="list" style="display:none">`+(p.sold.length?p.sold.map(s=>row(s.ts,s.sig,s.src,`<span class="rose b">\u2212${fmt(s.qty)}</span> <a class="tok" href="${tokUrl(s.mint)}" target="_blank">${esc(sym(s.mint))}</a>`,s.sol?`<span class="sky">+${fmt(s.sol,3)} \u25CE</span>`:"")).join(""):'<div class="empty">none</div>')+`</div>`;
+  let st="";
+  if(recips.length)st+=`<div class="card"><div class="h vio">\uD83D\uDC65 TOP RECIPIENTS</div>`+recips.slice(0,10).map(r=>`<div class="holder"><a class="tok" href="${accUrl(r.to)}" target="_blank">${short(r.to,5)}</a><span style="margin-left:auto" class="mut">${fmt(r.sol,3)} \u25CE \u00D7${r.count}</span></div>`).join("")+`</div>`;
+  st+=`<div class="list">`+(p.sent.length?p.sent.map(s=>row(s.ts,s.sig,null,`<a class="tok" href="${accUrl(s.to)}" target="_blank">\u2192 ${short(s.to,5)}</a>`,`<span class="mut">${fmt(s.amount,s.isToken?2:3)} ${s.isToken?esc(sym(s.asset)):"\u25CE"}</span>`)).join(""):'<div class="empty">none</div>')+`</div>`;
+  h+=`<div id="wt" style="display:none">${st}</div>`;
+  $("out").innerHTML=h;
+}
+function wTab(e,which){document.querySelectorAll("#out .tab").forEach(t=>t.classList.remove("on"));e.currentTarget.classList.add("on");$("wb").style.display=which==="b"?"":"none";$("ws").style.display=which==="s"?"":"none";$("wt").style.display=which==="t"?"":"none";}
+function row(ts,sig,src,left,right){return `<div class="row"><div class="l">${left}</div>${src?`<span class="src">${esc(src)}</span>`:""}<div class="r">${right}</div><div class="t">${dt(ts)}</div><a class="ext" href="${txUrl(sig)}" target="_blank">\u2197</a></div>`;}
+
+/* ============ TOKEN RUG-SCAN ============ */
+async function runToken(mint){
+  prog("Reading mint info...");
+  const info=await rpc("getAccountInfo",[mint,{encoding:"jsonParsed"}]);
+  const pi=info&&info.value&&info.value.data&&info.value.data.parsed&&info.value.data.parsed.info;
+  if(!pi)throw new Error("Ye valid SPL token mint nahi lagta.");
+  const decimals=pi.decimals,supplyUi=Number(pi.supply)/Math.pow(10,decimals),mintAuth=pi.mintAuthority,freezeAuth=pi.freezeAuthority;
+  await resolveSymbols([mint]);
+  prog("Reading top holders...");
+  const largest=await rpc("getTokenLargestAccounts",[mint]);const accts=(largest&&largest.value)||[];
+  prog("Resolving holder owners...");
+  const owners=await mapLimit(accts.slice(0,20),5,async a=>{try{const r=await rpc("getAccountInfo",[a.address,{encoding:"jsonParsed"}]);return r&&r.value&&r.value.data.parsed.info.owner;}catch(_){return null;}});
+  const holders=accts.slice(0,20).map((a,i)=>({owner:owners[i]||a.address,ui:a.uiAmount,pct:supplyUi?(a.uiAmount/supplyUi*100):0}));
+  prog("Checking holders for fresh/insider wallets...");
+  const top12=holders.slice(0,15);
+  const fresh=await mapLimit(top12,4,async hh=>{try{const sigs=await rpc("getSignaturesForAddress",[hh.owner,{limit:1000}]);return {cnt:sigs.length,isFresh:sigs.length<=30};}catch(_){return {cnt:null,isFresh:false};}});
+  top12.forEach((hh,i)=>{hh.cnt=fresh[i]?fresh[i].cnt:null;hh.isFresh=fresh[i]?!!fresh[i].isFresh:false;});
+  prog("Reading holder portfolios...");
+  const dispH=holders.slice(0,15);
+  window.__holds={};
+  await mapLimit(dispH,3,async (hh,i)=>{try{const hold=await getHoldings(hh.owner);hh.port=hold.total;hh.solBal=hold.sol;window.__holds[i]=hold;}catch(_){hh.port=null;}});
+  prog("Detecting acquisition source (fresh wallets)...");
+  await mapLimit(dispH.filter(h=>h.isFresh),2,async hh=>{hh.acq=await getAcquisition(hh.owner,mint);});
+  const airSrc={};dispH.forEach(h=>{if(h.acq&&h.acq.type==="airdrop")airSrc[h.acq.from]=(airSrc[h.acq.from]||0)+1;});
+  const topAir=Object.entries(airSrc).sort((a,b)=>b[1]-a[1])[0];
+  const top10pct=holders.slice(0,10).reduce((s,h)=>s+h.pct,0);
+  const freshCount=top12.filter(h=>h.isFresh).length,freshPct=top12.length?freshCount/top12.length*100:0;
+  const flags=[];
+  if(mintAuth)flags.push({bad:1,t:"Mint authority ACTIVE \u2014 dev aur token bana sakta (dilution risk)"});else flags.push({ok:1,t:"Mint authority renounced"});
+  if(freezeAuth)flags.push({bad:1,t:"Freeze authority ACTIVE \u2014 dev tumhare token freeze kar sakta"});else flags.push({ok:1,t:"Freeze authority renounced"});
+  if(top10pct>50)flags.push({bad:1,t:`Top 10 holders ${fmt(top10pct,1)}% supply \u2014 bahut concentrated`});else if(top10pct>30)flags.push({warn:1,t:`Top 10 holders ${fmt(top10pct,1)}% \u2014 medium concentration`});else flags.push({ok:1,t:`Top 10 holders ${fmt(top10pct,1)}% \u2014 well distributed`});
+  if(freshPct>=40)flags.push({bad:1,t:`Top holders mein ${fmt(freshPct,0)}% fresh wallets \u2014 insider/bundle shaq`});else if(freshCount>0)flags.push({warn:1,t:`${freshCount} fresh wallets top holders mein`});else flags.push({ok:1,t:"Top holders aged wallets hain"});
+  if(topAir&&topAir[1]>=2)flags.push({bad:1,t:`${topAir[1]} fresh wallets ko ${short(topAir[0],4)} ne airdrop kiya \u2014 insider distribution shaq`});
+  const risk=flags.filter(f=>f.bad).length;
+  const verdict=risk>=3?{t:"HIGH RISK",c:"red"}:risk===2?{t:"ELEVATED RISK",c:"amb"}:risk===1?{t:"SOME RISK",c:"amb"}:{t:"LOOKS CLEAN-ish",c:"em"};
+  let h=`<div class="card"><div class="h">\uD83E\uDE99 ${esc(sym(mint))} <span class="mut" style="font-weight:400;font-size:10px">${short(mint,5)}</span></div>
+    <div class="verdict ${verdict.c}">${verdict.t}</div>
+    <div class="mut" style="font-size:11px;margin-top:5px">heuristic scan \u00B7 ${risk} red flags</div></div>`;
+  h+=`<div class="grid"><div class="stat"><div class="lbl">Supply</div><div class="val" style="font-size:14px">${fmt(supplyUi,0)}</div></div>
+    <div class="stat"><div class="lbl">Top 10 hold</div><div class="val ${top10pct>50?'red':top10pct>30?'amb':'em'}">${fmt(top10pct,1)}%</div></div>
+    <div class="stat"><div class="lbl">Fresh in top15</div><div class="val ${freshPct>=40?'red':'amb'}">${freshCount}</div></div></div>`;
+  h+=`<div class="card"><div class="h">\uD83D\uDEA9 SIGNALS</div>`+flags.map(f=>`<div class="flag ${f.bad?'bad':f.warn?'warn':'ok'}"><span class="fi">${f.bad?'\u2715':f.warn?'!':'\u2713'}</span><span>${esc(f.t)}</span></div>`).join("")+`</div>`;
+  h+=`<div class="card"><div class="h vio">TOP HOLDERS <span class="mut" style="font-weight:400;font-size:10px">— tap to expand</span></div>`+holders.slice(0,15).map((hh,i)=>`<div class="hwrap"><div class="hrow" onclick="expandHolder(${i},'${hh.owner}')"><div class="ring sm">${i+1}</div><span class="emoji">${tierEmoji(hh.port)}</span><a class="tok" href="${accUrl(hh.owner)}" target="_blank" onclick="event.stopPropagation()">${short(hh.owner,5)}</a><span class="pct b">[${fmt(hh.pct,2)}%]</span>${hh.port?` <span class="cy" style="font-size:11px;font-weight:700">${cusd(hh.port)}</span>`:''}${hh.isFresh?'<span class="badge fresh">🌱 FRESH</span>':''}${hh.acq?(hh.acq.type==="bought"?'<span class="badge buy">🛒 BOUGHT</span>':hh.acq.type==="airdrop"?`<span class="badge air">🎁 ← <a href="${accUrl(hh.acq.from)}" target="_blank" onclick="event.stopPropagation()" style="color:inherit;text-decoration:underline">${short(hh.acq.from,4)}</a></span>`:''):''}${hh.cnt!=null?`<span class="mut" style="font-size:10px">${hh.cnt} tx</span>`:''}<span class="chev" id="chev-${i}">▾</span></div><div class="hbody" id="hldr-${i}" style="display:none"></div></div>`).join("")+`</div>`;
+  h+=`<button class="more" onclick="buildBubbleMap()">🫧 BUILD BUBBLE MAP (connections dekho)</button><div id="bmap"></div>`;
+  h+=`<div class="meta"><a class="ext" href="${tokUrl(mint)}" target="_blank">Solscan \u2197</a><span style="margin-left:auto">heuristics \u2014 final call apni research se lo</span></div>`;
+  window.__scanMint=mint;window.__dispH=dispH;
+  $("out").innerHTML=h;
+}
+
+/* ============ FUND-FLOW TRACE ============ */
+async function runTrace(start){
+  const depth=parseInt($("depth").value||"3",10);const chain=[];const seen=new Set();let cur=start;
+  for(let d=0;d<depth;d++){
+    if(seen.has(cur))break;seen.add(cur);
+    prog(`Tracing hop ${d+1}/${depth}: ${short(cur,5)}...`);
+    let all=[],before=null,pages=0;
+    while(pages<2){const b=await enhTx(cur,before);all=all.concat(b);pages++;if(b.length<100)break;before=b[b.length-1].signature;}
+    const p=parseTxns(all,cur),recips=topRecip(p.sent),top=recips[0];
+    chain.push({wallet:cur,sentTotal:p.totals.solSent,top:top||null,nRecip:recips.length});
+    if(!top)break;cur=top.to;
+  }
+  let h=`<div class="card"><div class="h vio">\uD83D\uDD17 FUND-FLOW TRACE <span class="mut" style="font-weight:400;font-size:10px">\u2014 bada paisa kahaan gaya</span></div>`;
+  chain.forEach((c,i)=>{
+    h+=`<div class="node"><div class="ring">${i+1}</div><a class="tok" href="${accUrl(c.wallet)}" target="_blank">${short(c.wallet,5)}</a>
+      <span class="mut" style="font-size:10px">${fmt(c.sentTotal,2)} \u25CE out \u00B7 ${c.nRecip} recipients</span></div>`;
+    if(c.top)h+=`<div class="node" style="padding-left:28px"><span class="vio b">\u21B3 ${fmt(c.top.sol,3)} \u25CE \u2192</span> <a class="tok" href="${accUrl(c.top.to)}" target="_blank">${short(c.top.to,5)}</a></div>`;
+  });
+  if(chain.length&&!chain[chain.length-1].top)h+=`<div class="node mut" style="padding-left:28px">\u21B3 trail ends (leaf wallet / no outgoing SOL)</div>`;
+  h+=`</div><div class="meta"><span class="mut">Har hop pe sabse bade SOL recipient ko follow kiya. Endpoint aksar CEX deposit / cashout wallet hota hai.</span></div>`;
+  $("out").innerHTML=h;
+}
+
+/* ============ LIVE WATCH (balance + holdings + activity) ============ */
+let watchTimer=null,watchSeen=new Set(),watchHold=null;
+async function runWatch(W){
+  if(watchTimer){clearInterval(watchTimer);watchTimer=null;}
+  watchSeen=new Set();
+  if("Notification"in window&&Notification.permission==="default"){try{await Notification.requestPermission();}catch(_){}}
+  prog("Loading balance & holdings...");
+  const results=await Promise.all([getHoldings(W),enhTx(W,null)]);
+  const hold=results[0],base=results[1];
+  watchHold=hold;base.forEach(t=>watchSeen.add(t.signature));
+  renderWatch(W,base,hold);
+  watchTimer=setInterval(()=>pollWatch(W),30000);
+}
+async function pollWatch(W){
+  try{
+    const latest=await enhTx(W,null);
+    const fresh=latest.filter(t=>!watchSeen.has(t.signature));
+    fresh.forEach(t=>watchSeen.add(t.signature));
+    if(fresh.length){
+      const p=parseTxns(fresh,W);await resolveSymbols([...p.bought,...p.sold].map(x=>x.mint));
+      const buyTxt=p.bought.map(b=>`BUY ${fmt(b.qty,1)} ${sym(b.mint)}`).slice(0,2);
+      const sellTxt=p.sold.map(s=>`SELL ${fmt(s.qty,1)} ${sym(s.mint)}`).slice(0,2);
+      const body=[...buyTxt,...sellTxt].join(" \u00B7 ")||fresh.map(t=>t.type).slice(0,3).join(", ");
+      if("Notification"in window&&Notification.permission==="granted")new Notification(`${short(W,4)} \u00B7 ${fresh.length} new`,{body});
+      try{watchHold=await getHoldings(W);}catch(_){}
+      renderWatch(W,latest,watchHold);
+    }
+  }catch(e){}
+}
+function renderWatch(W,latest,hold){
+  let h=`<div class="card"><div class="h em" style="justify-content:space-between"><span style="display:flex;align-items:center;gap:8px">\uD83D\uDC41 WATCHING ${short(W,5)}</span><span style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:10px" class="mut"><span class="pulse"></span>live \u00B7 30s</span></div>`;
+  h+=`<div class="grid">
+    <div class="stat"><div class="lbl">SOL Balance</div><div class="val em">${fmt(hold.sol,3)} \u25CE</div>${hold.solValue?`<div class="mut" style="font-size:10px;margin-top:3px">${usd(hold.solValue)}</div>`:""}</div>
+    <div class="stat"><div class="lbl">Tokens Held</div><div class="val">${hold.tokens.length}</div></div>
+    <div class="stat"><div class="lbl">Est. Portfolio</div><div class="val cy">${hold.total?usd(hold.total):"\u2014"}</div></div>
+  </div></div>`;
+  h+=`<div class="card"><div class="h vio">\uD83E\uDE99 HOLDINGS</div>`;
+  if(!hold.tokens.length)h+=`<div class="empty">Koi SPL token nahi.</div>`;
+  hold.tokens.slice(0,40).forEach(t=>{
+    h+=`<div class="holder"><a class="tok" href="${tokUrl(t.mint)}" target="_blank">${esc(sym(t.mint))}</a>
+      <span class="mut" style="font-size:11px">${fmt(t.qty,t.qty<1?6:2)}</span>
+      <span style="margin-left:auto" class="b">${t.value?usd(t.value):'<span class="mut" style="font-weight:400">no price</span>'}</span></div>`;});
+  h+=`</div>`;
+  h+=`<div class="card"><div class="h sky">\u26A1 RECENT ACTIVITY</div><div class="list">`;
+  latest.slice(0,20).forEach(t=>{
+    let label=t.type,c="mut";if(t.type==="SWAP"){c="sky";}else if(t.type==="TRANSFER"){c="vio";}
+    h+=row(t.timestamp,t.signature,t.source,`<span class="${c} b">${esc(label)}</span> <span class="mut" style="font-size:10px">${esc((t.description||"").slice(0,55))}</span>`,"");});
+  h+=`</div></div>`;
+  $("out").innerHTML=h;
+}
+
+function tierEmoji(v){if(v==null||v<=0)return "·";return v>=250000?"🐋":v>=50000?"🦈":v>=10000?"🐬":v>=1000?"🐟":"🦐";}
+async function getTokenSupply(mint){try{const v=await rpc("getTokenSupply",[mint]);return v&&v.value&&v.value.uiAmount;}catch(_){return null;}}
+window.expandHolder=async function(i,owner){
+  const body=document.getElementById("hldr-"+i),chev=document.getElementById("chev-"+i);if(!body)return;
+  if(body.style.display!=="none"){body.style.display="none";if(chev)chev.textContent="\u25BE";return;}
+  body.style.display="";if(chev)chev.textContent="\u25B4";
+  if(body.dataset.loaded==="1")return;
+  body.innerHTML=`<div class="mut" style="font-size:11px;padding:4px 0"><span class="spin"></span> loading wallet...</div>`;
+  try{
+    const hold=(window.__holds&&window.__holds[i])||await getHoldings(owner);
+    const top=hold.tokens.slice(0,6);
+    await mapLimit(top,4,async t=>{if(t.supplyPct===undefined){const sup=await getTokenSupply(t.mint);t.supplyPct=sup?t.qty/sup*100:null;}});
+    let b=`<div class="hbal">Bal <span class="em b">${fmt(hold.sol,2)} \u25CE</span>${hold.solValue?` <span class="mut">(${usd(hold.solValue)})</span>`:""} \u00B7 Port <span class="cy b">${hold.total?usd(hold.total):"\u2014"}</span></div>`;
+    if(!top.length)b+=`<div class="mut" style="font-size:11px">no token holdings</div>`;
+    top.forEach((t,j)=>{const last=j===top.length-1;b+=`<div class="hitem"><span class="mut">${last?"\u2514":"\u251C"}</span> <a class="tok" href="${tokUrl(t.mint)}" target="_blank">${esc(sym(t.mint))}</a>: <span class="b">${t.value?usd(t.value):fmt(t.qty,2)}</span>${t.supplyPct!=null?` <span class="mut">(${fmt(t.supplyPct,2)}%)</span>`:""}</div>`;});
+    body.innerHTML=b;body.dataset.loaded="1";
+  }catch(e){body.innerHTML=`<div class="amb" style="font-size:11px">load fail: ${esc(e.message)}</div>`;}
+};
+
+async function getAcquisition(owner,mint){
+  try{
+    let all=[],before=null,pages=0;
+    while(pages<2){const b=await enhTx(owner,before);all=all.concat(b);pages++;if(b.length<100)break;before=b[b.length-1].signature;}
+    all.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+    for(const tx of all){
+      const tt=(tx.tokenTransfers||[]).find(x=>x.mint===mint&&x.toUserAccount===owner);
+      if(!tt)continue;
+      const isSwap=tx.type==="SWAP"||(tx.events&&tx.events.swap);
+      const paid=(tx.tokenTransfers||[]).some(x=>x.fromUserAccount===owner)||(tx.nativeTransfers||[]).some(x=>x.fromUserAccount===owner&&x.amount>0);
+      if(isSwap||paid)return {type:"bought"};
+      return {type:"airdrop",from:tt.fromUserAccount,sig:tx.signature};
+    }
+    return {type:"unknown"};
+  }catch(_){return {type:"unknown"};}
+}
+window.buildBubbleMap=async function(){
+  const H=window.__dispH||[];const box=document.getElementById("bmap");if(!H.length||!box)return;
+  box.innerHTML=`<div class="card"><div class="mut" style="font-size:11px;padding:6px"><span class="spin"></span> Building bubble map \u2014 scanning connections...</div></div>`;
+  const ownerSet=new Set(H.map(h=>h.owner));const edgesSet=new Set();
+  await mapLimit(H,2,async h=>{
+    try{
+      const txns=await enhTx(h.owner,null);const partners=new Set();
+      txns.forEach(tx=>{
+        (tx.nativeTransfers||[]).forEach(n=>{if(n.fromUserAccount&&n.fromUserAccount!==h.owner&&ownerSet.has(n.fromUserAccount))partners.add(n.fromUserAccount);if(n.toUserAccount&&n.toUserAccount!==h.owner&&ownerSet.has(n.toUserAccount))partners.add(n.toUserAccount);});
+        (tx.tokenTransfers||[]).forEach(n=>{if(n.fromUserAccount&&n.fromUserAccount!==h.owner&&ownerSet.has(n.fromUserAccount))partners.add(n.fromUserAccount);if(n.toUserAccount&&n.toUserAccount!==h.owner&&ownerSet.has(n.toUserAccount))partners.add(n.toUserAccount);});
+      });
+      partners.forEach(p=>{const a=h.owner<p?h.owner:p,b=h.owner<p?p:h.owner;edgesSet.add(a+"|"+b);});
+    }catch(_){}
+  });
+  const bySource={};H.forEach(h=>{if(h.acq&&h.acq.type==="airdrop"){(bySource[h.acq.from]=bySource[h.acq.from]||[]).push(h.owner);}});
+  Object.values(bySource).forEach(list=>{for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){const a=list[i]<list[j]?list[i]:list[j],b=list[i]<list[j]?list[j]:list[i];edgesSet.add(a+"|"+b);}});
+  renderBubbleMap(H,[...edgesSet].map(e=>e.split("|")));
+};
+function renderBubbleMap(H,edges){
+  const W=700,Hh=460,idx={};H.forEach((h,i)=>idx[h.owner]=i);
+  const maxPct=Math.max.apply(null,H.map(h=>h.pct).concat([1]));
+  const nodes=H.map((h,i)=>({owner:h.owner,pct:h.pct,isFresh:h.isFresh,port:h.port||0,r:9+Math.sqrt((h.pct||0)/maxPct)*32,x:W/2+Math.cos(i/H.length*6.2832)*150+(Math.random()*16-8),y:Hh/2+Math.sin(i/H.length*6.2832)*120+(Math.random()*16-8),vx:0,vy:0}));
+  const E=edges.map(p=>[idx[p[0]],idx[p[1]]]).filter(p=>p[0]!=null&&p[1]!=null);
+  for(let it=0;it<220;it++){
+    for(let i=0;i<nodes.length;i++){let fx=0,fy=0;
+      for(let j=0;j<nodes.length;j++){if(i===j)continue;let dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y,d2=dx*dx+dy*dy+0.01,d=Math.sqrt(d2);const rep=Math.pow(nodes[i].r+nodes[j].r+28,2)/d2;fx+=dx/d*rep*0.5;fy+=dy/d*rep*0.5;}
+      fx+=(W/2-nodes[i].x)*0.012;fy+=(Hh/2-nodes[i].y)*0.012;
+      nodes[i].vx=(nodes[i].vx+fx)*0.85;nodes[i].vy=(nodes[i].vy+fy)*0.85;
+    }
+    E.forEach(p=>{const a=p[0],b=p[1];let dx=nodes[b].x-nodes[a].x,dy=nodes[b].y-nodes[a].y,d=Math.sqrt(dx*dx+dy*dy)+.01,f=(d-95)*0.02;nodes[a].vx+=dx/d*f;nodes[a].vy+=dy/d*f;nodes[b].vx-=dx/d*f;nodes[b].vy-=dy/d*f;});
+    nodes.forEach(n=>{n.x+=n.vx;n.y+=n.vy;n.x=Math.max(n.r+4,Math.min(W-n.r-4,n.x));n.y=Math.max(n.r+4,Math.min(Hh-n.r-4,n.y));});
+  }
+  let svg=`<svg viewBox="0 0 ${W} ${Hh}" style="width:100%;height:auto;background:var(--bg2);border-radius:10px">`;
+  E.forEach(p=>{svg+=`<line x1="${nodes[p[0]].x.toFixed(1)}" y1="${nodes[p[0]].y.toFixed(1)}" x2="${nodes[p[1]].x.toFixed(1)}" y2="${nodes[p[1]].y.toFixed(1)}" stroke="#39414f" stroke-width="1"/>`;});
+  nodes.forEach((n,i)=>{const col=n.isFresh?"#fbbf24":n.port>=250000?"#2dd4a7":n.port>=50000?"#22d3ee":n.port>=10000?"#38bdf8":"#7a8290";
+    svg+=`<g style="cursor:pointer" onclick="window.open('${accUrl(n.owner)}','_blank')"><circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r.toFixed(1)}" fill="${col}" fill-opacity="0.20" stroke="${col}" stroke-width="1.5"/><text x="${n.x.toFixed(1)}" y="${(n.y-1).toFixed(1)}" text-anchor="middle" font-size="9" fill="${col}" font-weight="700">${i+1}</text><text x="${n.x.toFixed(1)}" y="${(n.y+8).toFixed(1)}" text-anchor="middle" font-size="7" fill="#e6e9ef">${fmt(n.pct,1)}%</text></g>`;});
+  svg+=`</svg>`;
+  document.getElementById("bmap").innerHTML=`<div class="card"><div class="h cy">\U0001FAE7 BUBBLE MAP <span class="mut" style="font-weight:400;font-size:10px">\u2014 ${E.length} connections</span></div>${svg}<div class="meta" style="margin-top:8px;flex-wrap:wrap"><span class="mut">\U0001F7E1 fresh \u00B7 \U0001F7E2 whale \u00B7 \U0001F535 fish \u00B7 lines = connected wallets. Cluster = insider/gambling shaq.</span></div></div>`;
+}
+
+async function parseBySig(sigs){
+  const out=[];
+  for(let i=0;i<sigs.length;i+=100){
+    const chunk=sigs.slice(i,i+100);
+    const res=await fetch("/api/helius",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify({type:"parse",signatures:chunk})});
+    if(res.ok){const j=await res.json();if(Array.isArray(j))out.push(...j);}
+  }
+  return out;
+}
+async function currentBal(owner,mint){
+  try{const r=await rpc("getTokenAccountsByOwner",[owner,{mint},{encoding:"jsonParsed"}]);
+    let s=0;((r&&r.value)||[]).forEach(a=>{s+=a.account.data.parsed.info.tokenAmount.uiAmount||0;});return s;}
+  catch(_){return null;}
+}
+async function runLaunch(mint){
+  prog("Finding launch transactions...");
+  let pages=[],before=null,reached=false;
+  for(let p=0;p<10;p++){
+    const sigs=await rpc("getSignaturesForAddress",[mint,{limit:1000,before}]);
+    if(!sigs||!sigs.length){reached=true;break;}
+    pages=pages.concat(sigs);before=sigs[sigs.length-1].signature;
+    if(sigs.length<1000){reached=true;break;}
+    prog(`Scanning history... ${pages.length} txns`);
+  }
+  pages.reverse(); // oldest first
+  const earliest=pages.slice(0,150);
+  if(!earliest.length){showErr("Koi transaction nahi mili. Mint address check karo.");return;}
+  prog("Parsing early transactions...");
+  const parsed=await parseBySig(earliest.map(x=>x.signature));
+  parsed.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+  const dev=parsed.length?parsed[0].feePayer:null;
+  const firstTs=parsed.length?parsed[0].timestamp:null;
+  const seen={},buyers=[];
+  for(const tx of parsed){
+    const recv=(tx.tokenTransfers||[]).filter(t=>t.mint===mint&&t.toUserAccount&&Number(t.tokenAmount)>0);
+    for(const tt of recv){
+      const w=tt.toUserAccount;
+      if(w===dev||seen[w])continue;
+      seen[w]=true;
+      buyers.push({wallet:w,ts:tx.timestamp,sig:tx.signature,qty:Number(tt.tokenAmount)||0});
+      if(buyers.length>=30)break;
+    }
+    if(buyers.length>=30)break;
+  }
+  const firstBuyTs=buyers.length?buyers[0].ts:firstTs;
+  buyers.forEach(b=>{b.sniper=(b.ts-firstBuyTs)<=2;});
+  await resolveSymbols([mint]);
+  prog("Checking who has exited...");
+  await mapLimit(buyers,3,async b=>{const bal=await currentBal(b.wallet,mint);b.bal=bal;b.exited=(bal!=null&&bal<(b.qty*0.05));});
+  renderLaunch(mint,{dev,buyers,reached,firstTs});
+}
+function renderLaunch(mint,d){
+  const exited=d.buyers.filter(b=>b.exited).length;
+  const snipers=d.buyers.filter(b=>b.sniper).length;
+  let h=`<div class="card"><div class="h">\U0001F680 LAUNCH SCAN \u2014 ${esc(sym(mint))} <span class="mut" style="font-weight:400;font-size:10px">${short(mint,5)}</span></div>`;
+  if(!d.reached)h+=`<div class="flag warn"><span class="fi">!</span><span>Token bada hai \u2014 poore launch tak nahi pohoncha, result partial. (Fresh launches pe best.)</span></div>`;
+  h+=`<div class="mut" style="font-size:11px">Dev: ${d.dev?`<a class="tok" href="${accUrl(d.dev)}" target="_blank">${short(d.dev,5)}</a>`:"\u2014"} \u00B7 Launch: ${dt(d.firstTs)}</div></div>`;
+  h+=`<div class="grid">
+    <div class="stat"><div class="lbl">Early buyers</div><div class="val">${d.buyers.length}</div></div>
+    <div class="stat"><div class="lbl">Snipers/bots</div><div class="val amb">${snipers}</div></div>
+    <div class="stat"><div class="lbl">Already exited</div><div class="val ${exited>d.buyers.length/2?'red':'em'}">${exited}/${d.buyers.length}</div></div>
+  </div>`;
+  h+=`<div class="card"><div class="h vio">FIRST BUYERS (launch order)</div>`;
+  if(!d.buyers.length)h+=`<div class="empty">Koi early buyer detect nahi hua.</div>`;
+  d.buyers.forEach((b,i)=>{
+    h+=`<div class="holder"><div class="ring sm">${i+1}</div>
+      <a class="tok" href="${accUrl(b.wallet)}" target="_blank">${short(b.wallet,5)}</a>
+      ${b.sniper?'<span class="badge air">\u26A1 SNIPER</span>':''}
+      <span class="mut" style="font-size:10px">+${Math.max(0,(b.ts-d.firstTs))}s</span>
+      <span style="margin-left:auto" class="b ${b.exited?'red':'em'}">${b.exited?'EXITED':'HOLDING'}</span></div>`;
+  });
+  h+=`</div><div class="meta"><span class="mut">EXITED = ab 5% se kam bag bacha. Ye snapshot hai \u2014 live tracking next phase.</span></div>`;
+  $("out").innerHTML=h;
+}
+
+/* boot */
+renderKeyField();renderControls();
+window.setMode=setMode;window.run=run;window.wTab=wTab;window.runLaunch=runLaunch;
+</script>
+</body>
+</html>
