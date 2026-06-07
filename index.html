@@ -599,6 +599,14 @@ async function runLaunch(mint){
   await mapLimit(buyers,3,async b=>{const bal=await currentBal(b.wallet,mint);b.bal=bal;b.exited=(bal!=null&&bal<(b.qty*0.05));});
   renderLaunch(mint,{dev,buyers,reached,firstTs});
 }
+window.trackCoin=async function(mint){
+  try{
+    const res=await fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify({mint,symbol:window.__trackSym||""})});
+    const j=await res.json();
+    if(!res.ok)throw new Error(j.error||("Error "+res.status));
+    const b=document.getElementById("trackBtn");if(b){b.textContent="✓ TRACKING ON — alerts Telegram pe aayenge";b.disabled=true;}
+  }catch(e){const b=document.getElementById("trackBtn");if(b)b.textContent="Track fail: "+(e.message||e);}
+};
 function renderLaunch(mint,d){
   const exited=d.buyers.filter(b=>b.exited).length;
   const snipers=d.buyers.filter(b=>b.sniper).length;
@@ -610,6 +618,8 @@ function renderLaunch(mint,d){
     <div class="stat"><div class="lbl">Snipers/bots</div><div class="val amb">${snipers}</div></div>
     <div class="stat"><div class="lbl">Already exited</div><div class="val ${exited>d.buyers.length/2?'red':'em'}">${exited}/${d.buyers.length}</div></div>
   </div>`;
+  window.__trackSym=sym(mint);
+  h+=`<button class="more" id="trackBtn" onclick="trackCoin('${mint}')">📍 TRACK THIS COIN (live exit alerts)</button>`;
   h+=`<div class="card"><div class="h vio">FIRST BUYERS (launch order)</div>`;
   if(!d.buyers.length)h+=`<div class="empty">Koi early buyer detect nahi hua.</div>`;
   d.buyers.forEach((b,i)=>{
