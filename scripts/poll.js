@@ -33,6 +33,18 @@ async function currentBal(owner, mint) {
     return s;
   } catch (_) { return null; }
 }
+async function tokenPrice(mint) {
+  try {
+    const r = await fetch(`https://lite-api.jup.ag/price/v2?ids=${mint}`);
+    if (r.ok) { const j = await r.json(); const p = j.data && j.data[mint] && j.data[mint].price; if (p) return Number(p); }
+  } catch (_) {}
+  try {
+    const a = await rpc("getAsset", { id: mint });
+    const p = a && a.token_info && a.token_info.price_info && a.token_info.price_info.price_per_token;
+    if (p != null) return Number(p);
+  } catch (_) {}
+  return null;
+}
 async function sb(path, { method = "GET", body = null, prefer = null } = {}) {
   const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
   if (prefer) headers.Prefer = prefer;
@@ -84,7 +96,8 @@ async function initCoin(coin) {
   const mint = coin.mint;
   console.log("init", mint);
   const { dev, launchTs, buyers } = await scanLaunch(mint);
-  await sb(`tracked_coins?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal", body: { dev_wallet: dev, launch_ts: launchTs } });
+  const initPrice = await tokenPrice(mint);
+  await sb(`tracked_coins?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal", body: { dev_wallet: dev, launch_ts: launchTs, init_price: initPrice } });
   if (buyers.length) {
     await sb("early_buyers", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: buyers.map(b => ({ mint, wallet: b.wallet, rank: b.rank, entry_ts: b.ts, entry_qty: b.qty, is_sniper: b.sniper })) });
     await sb("positions", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: buyers.map(b => ({ mint, wallet: b.wallet, entry_qty: b.qty, current_qty: b.qty, pct_exited: 0, exited: false })) });
@@ -121,8 +134,11 @@ async function checkCoin(coin) {
       const prior = await sb(`trades?wallet=eq.${pos.wallet}&mint=eq.${mint}&select=id&limit=1`);
       if (!prior || !prior.length) {
         const bts = entryTs[pos.wallet] || null;
+        const exitPrice = await tokenPrice(mint);
+        const entryPrice = coin.init_price || null;
+        const roi = (entryPrice && exitPrice) ? (exitPrice / entryPrice) : null;
         await sb("trades", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal",
-          body: { wallet: pos.wallet, mint, buy_ts: bts, sell_ts: nowSec, hold_secs: bts ? (nowSec - bts) : null, pct_sold: pct } });
+          body: { wallet: pos.wallet, mint, buy_ts: bts, sell_ts: nowSec, hold_secs: bts ? (nowSec - bts) : null, pct_sold: pct, entry_price: entryPrice, exit_price: exitPrice, roi } });
       }
     }
   }
