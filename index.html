@@ -601,9 +601,9 @@ async function runLaunch(mint){
       if(w===dev||seen[w])continue;
       seen[w]=true;
       buyers.push({wallet:w,ts:tx.timestamp,sig:tx.signature,qty:Number(tt.tokenAmount)||0});
-      if(buyers.length>=30)break;
+      if(buyers.length>=50)break;
     }
-    if(buyers.length>=30)break;
+    if(buyers.length>=50)break;
   }
   const firstBuyTs=buyers.length?buyers[0].ts:firstTs;
   buyers.forEach(b=>{b.sniper=(b.ts-firstBuyTs)<=2;});
