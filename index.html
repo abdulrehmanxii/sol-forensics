@@ -113,6 +113,16 @@
   .hbody{padding:2px 0 10px 36px;}
   .hbal{font-size:11px;color:var(--mut);margin-bottom:7px;}
   .hitem{font-size:12px;padding:2px 0;}
+  .histwrap{margin-bottom:12px;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 11px;}
+  .histhd{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+  .histhd button{background:none;border:0;color:var(--dim);font:inherit;font-size:10px;cursor:pointer;}
+  .histhd button:hover{color:var(--rose);}
+  .histrow{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid rgba(31,36,46,.5);}
+  .histrow:last-child{border:0;}
+  .histq{flex:1;font-size:12px;cursor:pointer;color:var(--txt);}
+  .histq:hover{color:var(--em);text-decoration:underline;}
+  .histx{background:none;border:0;color:var(--dim);cursor:pointer;font-size:11px;}
+  .histx:hover{color:var(--rose);}
 
   .node{display:flex;align-items:center;gap:9px;padding:8px 0;font-size:12px;}
   .empty,.hint{text-align:center;color:var(--dim);font-size:12px;padding:22px 0;}
@@ -147,6 +157,7 @@
   </div>
 
   <div id="controls"></div>
+  <div id="history"></div>
   <div id="err"></div>
   <div id="prog"></div>
   <div id="out"></div>
@@ -292,7 +303,8 @@ function renderControls(){
   else if(mode==="trace")
     $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="addr" placeholder="Start wallet address"/><select id="depth"><option value="2">2 hops</option><option value="3" selected>3 hops</option><option value="4">4 hops</option><option value="5">5 hops</option></select><button class="go" id="goBtn">TRACE</button></div>`;
   $("goBtn").onclick=run;
-  $("addr").addEventListener("keydown",e=>{if(e.key==="Enter")run();});
+  $("addr").addEventListener("keydown",e=>{if(e.key==="Enter")run();  renderHistory(mode);
+});
 }
 function busy(b){const x=$("goBtn");if(!x)return;x.disabled=b;x.innerHTML=b?'<span class="spin"></span>':(mode==="watch"?"WATCH":mode==="trace"?"TRACE":"SCAN");}
 async function run(){
@@ -306,6 +318,7 @@ async function run(){
     else if(mode==="launch")await runLaunch(addr);
     else if(mode==="trace")await runTrace(addr);
     else if(mode==="watch")await runWatch(addr);
+    addHist(mode,addr);
   }catch(e){showErr(e.message||"Kuch ghalat ho gaya.");}
   finally{busy(false);prog("");}
 }
@@ -631,6 +644,20 @@ function renderLaunch(mint,d){
   });
   h+=`</div><div class="meta"><span class="mut">EXITED = ab 5% se kam bag bacha. Ye snapshot hai \u2014 live tracking next phase.</span></div>`;
   $("out").innerHTML=h;
+}
+
+function getHist(){try{return JSON.parse(localStorage.getItem("sfp_history")||"{}");}catch(_){return {};}}
+function saveHist(h){try{localStorage.setItem("sfp_history",JSON.stringify(h));}catch(_){}}
+function addHist(mode,q){if(!q)return;const h=getHist();const arr=(h[mode]||[]).filter(e=>e.q!==q);arr.unshift({q,ts:Date.now()});h[mode]=arr.slice(0,15);saveHist(h);renderHistory(mode);}
+window.delHist=function(mode,q){const h=getHist();h[mode]=(h[mode]||[]).filter(e=>e.q!==q);saveHist(h);renderHistory(mode);};
+window.clearHist=function(mode){const h=getHist();h[mode]=[];saveHist(h);renderHistory(mode);};
+window.pickHist=function(q){const a=document.getElementById("addr");if(a){a.value=q;run();}};
+function renderHistory(mode){
+  const box=document.getElementById("history");if(!box)return;
+  const arr=(getHist()[mode])||[];
+  if(!arr.length){box.innerHTML="";return;}
+  box.innerHTML=`<div class="histwrap"><div class="histhd"><span>Recent (${mode})</span><button onclick="clearHist('${mode}')">clear all</button></div>`+
+    arr.map(e=>`<div class="histrow"><span class="histq" onclick="pickHist('${e.q}')">${short(e.q,6)}</span><button class="histx" onclick="delHist('${mode}','${e.q}')">\u2715</button></div>`).join("")+`</div>`;
 }
 
 /* boot */
