@@ -1,0 +1,12 @@
+{
+  "name": "sol-forensics-worker",
+  "version": "1.0.0",
+  "description": "Always-on listener + poller for SOL Forensics",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
