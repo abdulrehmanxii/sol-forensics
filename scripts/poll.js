@@ -1,0 +1,137 @@
+// scripts/poll.js — Phase 2 poller (GitHub Actions cron, $0)
+// Reads tracked coins from Supabase, checks early wallets, alerts exits on Telegram.
+// Env (GitHub Actions Secrets): SUPABASE_URL, SUPABASE_KEY, HELIUS_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const HELIUS       = process.env.HELIUS_API_KEY;
+const TG_TOKEN     = process.env.TELEGRAM_BOT_TOKEN;
+const TG_CHAT      = process.env.TELEGRAM_CHAT_ID;
+
+const RPC   = `https://mainnet.helius-rpc.com/?api-key=${HELIUS}`;
+const PARSE = `https://api-mainnet.helius-rpc.com/v0/transactions?api-key=${HELIUS}`;
+const short = (s, n = 4) => (s ? s.slice(0, n) + "…" + s.slice(-n) : "");
+
+async function rpc(method, params) {
+  const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || "rpc err");
+  return j.result;
+}
+async function parseBySig(sigs) {
+  const out = [];
+  for (let i = 0; i < sigs.length; i += 100) {
+    const r = await fetch(PARSE, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transactions: sigs.slice(i, i + 100) }) });
+    if (r.ok) { const j = await r.json(); if (Array.isArray(j)) out.push(...j); }
+  }
+  return out;
+}
+async function currentBal(owner, mint) {
+  try {
+    const r = await rpc("getTokenAccountsByOwner", [owner, { mint }, { encoding: "jsonParsed" }]);
+    let s = 0; ((r && r.value) || []).forEach(a => { s += a.account.data.parsed.info.tokenAmount.uiAmount || 0; });
+    return s;
+  } catch (_) { return null; }
+}
+async function sb(path, { method = "GET", body = null, prefer = null } = {}) {
+  const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
+  if (prefer) headers.Prefer = prefer;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const txt = await r.text();
+  if (!r.ok) throw new Error(`supabase ${r.status}: ${txt.slice(0, 200)}`);
+  return txt ? JSON.parse(txt) : null;
+}
+async function tg(text) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: TG_CHAT, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+  } catch (e) { console.error("tg fail:", e.message); }
+}
+
+async function scanLaunch(mint) {
+  let pages = [], before = null;
+  for (let p = 0; p < 10; p++) {
+    const sigs = await rpc("getSignaturesForAddress", [mint, { limit: 1000, before }]);
+    if (!sigs || !sigs.length) break;
+    pages = pages.concat(sigs); before = sigs[sigs.length - 1].signature;
+    if (sigs.length < 1000) break;
+  }
+  pages.reverse();
+  const parsed = await parseBySig(pages.slice(0, 150).map(s => s.signature));
+  parsed.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const dev = parsed.length ? parsed[0].feePayer : null;
+  const launchTs = parsed.length ? parsed[0].timestamp : null;
+  const seen = {}, buyers = [];
+  for (const tx of parsed) {
+    const recv = (tx.tokenTransfers || []).filter(t => t.mint === mint && t.toUserAccount && Number(t.tokenAmount) > 0);
+    for (const tt of recv) {
+      const w = tt.toUserAccount;
+      if (w === dev || seen[w]) continue;
+      seen[w] = true;
+      buyers.push({ wallet: w, ts: tx.timestamp, qty: Number(tt.tokenAmount) || 0 });
+      if (buyers.length >= 30) break;
+    }
+    if (buyers.length >= 30) break;
+  }
+  const firstTs = buyers.length ? buyers[0].ts : launchTs;
+  buyers.forEach((b, i) => { b.rank = i + 1; b.sniper = (b.ts - firstTs) <= 2; });
+  return { dev, launchTs, buyers };
+}
+
+async function initCoin(coin) {
+  const mint = coin.mint;
+  console.log("init", mint);
+  const { dev, launchTs, buyers } = await scanLaunch(mint);
+  await sb(`tracked_coins?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal", body: { dev_wallet: dev, launch_ts: launchTs } });
+  if (buyers.length) {
+    await sb("early_buyers", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: buyers.map(b => ({ mint, wallet: b.wallet, rank: b.rank, entry_ts: b.ts, entry_qty: b.qty, is_sniper: b.sniper })) });
+    await sb("positions", { method: "POST", prefer: "resolution=merge-duplicates,return=minimal", body: buyers.map(b => ({ mint, wallet: b.wallet, entry_qty: b.qty, current_qty: b.qty, pct_exited: 0, exited: false })) });
+  }
+  await tg(`🟢 <b>Tracking started</b>\n${coin.symbol || short(mint)}\nEarly buyers: ${buyers.length} · snipers: ${buyers.filter(b => b.sniper).length}`);
+}
+
+async function checkCoin(coin) {
+  const mint = coin.mint;
+  const positions = await sb(`positions?mint=eq.${mint}&select=*`);
+  const newlyExited = [];
+  for (const pos of positions) {
+    const bal = await currentBal(pos.wallet, mint);
+    if (bal == null) continue;
+    const pct = pos.entry_qty > 0 ? Math.max(0, (1 - bal / pos.entry_qty)) * 100 : 0;
+    const exited = bal < pos.entry_qty * 0.05;
+    await sb(`positions?id=eq.${pos.id}`, { method: "PATCH", prefer: "return=minimal", body: { current_qty: bal, pct_exited: pct, exited, last_checked: new Date().toISOString() } });
+    if (exited && !pos.exited) newlyExited.push(pos.wallet);
+  }
+  for (const w of newlyExited) {
+    await tg(`🔴 <b>Early wallet EXITED</b>\n${coin.symbol || short(mint)}\n${short(w)} ne bag bech diya\nhttps://solscan.io/account/${w}`);
+    await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, wallet: w, kind: "wallet_exit" } });
+  }
+  const total = positions.length;
+  const exitedNow = positions.filter(p => p.exited).length + newlyExited.length;
+  if (total > 0 && (exitedNow / total) * 100 >= 30) {
+    const prior = await sb(`alerts_sent?mint=eq.${mint}&kind=eq.threshold&select=id`);
+    if (!prior || !prior.length) {
+      await tg(`⚠️ <b>${Math.round((exitedNow / total) * 100)}% early money EXITED</b>\n${coin.symbol || short(mint)}\nSmart/early wallets nikal rahe — dhyan se.`);
+      await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, kind: "threshold" } });
+    }
+  }
+  console.log(`checked ${mint}: ${newlyExited.length} new exits`);
+}
+
+(async () => {
+  for (const [k, v] of Object.entries({ SUPABASE_URL, SUPABASE_KEY, HELIUS, TG_TOKEN, TG_CHAT })) {
+    if (!v) { console.error("Missing env:", k); process.exit(1); }
+  }
+  const coins = await sb("tracked_coins?active=eq.true&select=*");
+  console.log(`${coins.length} coins tracked`);
+  for (const coin of coins) {
+    try {
+      const eb = await sb(`early_buyers?mint=eq.${coin.mint}&select=id&limit=1`);
+      if (!eb || !eb.length) await initCoin(coin);
+      else await checkCoin(coin);
+    } catch (e) { console.error(`coin ${coin.mint} error:`, e.message); }
+  }
+  console.log("done");
+})();
