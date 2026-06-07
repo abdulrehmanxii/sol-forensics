@@ -1,0 +1,19 @@
+name: listener
+on:
+  schedule:
+    - cron: '0 */5 * * *'      # har ~5 ghante restart (public repo = unlimited minutes)
+  workflow_dispatch: {}
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330        # ~5.5h tak chalega phir restart
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm i ws
+      - run: node scripts/listener.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
