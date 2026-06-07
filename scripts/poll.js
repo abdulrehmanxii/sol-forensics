@@ -147,10 +147,14 @@ async function checkCoin(coin) {
 
   // individual alerts: ONLY top 10 early wallets (noise control)
   for (const e of newlyExited.filter(x => x.rank <= 10)) {
+    const seen = await sb(`alerts_sent?mint=eq.${mint}&wallet=eq.${e.w}&kind=eq.wallet_exit&select=id&limit=1`);
+    if (seen && seen.length) continue;
     await tg(`🔴 <b>Top-${e.rank} early wallet EXITED</b>\n${name}\n${short(e.w)} ne pura bag bech diya\nhttps://solscan.io/account/${e.w}`);
     await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, wallet: e.w, kind: "wallet_exit" } });
   }
   for (const p of partialNow.filter(x => x.rank <= 10)) {
+    const seen = await sb(`alerts_sent?mint=eq.${mint}&wallet=eq.${p.w}&kind=eq.partial50&select=id&limit=1`);
+    if (seen && seen.length) continue;
     await tg(`🟠 <b>Top-${p.rank} early wallet selling</b>\n${name}\n${short(p.w)} ne ~${Math.round(p.pct)}% bech diya`);
     await sb("alerts_sent", { method: "POST", prefer: "return=minimal", body: { mint, wallet: p.w, kind: "partial50" } });
   }
@@ -175,9 +179,9 @@ async function checkCoin(coin) {
   console.log(`checked ${mint}: ${newlyExited.length} exits (${top10Exited} top10), ${partialNow.length} partial`);
 }
 
-(async () => {
+async function runPoll() {
   for (const [k, v] of Object.entries({ SUPABASE_URL, SUPABASE_KEY, HELIUS, TG_TOKEN, TG_CHAT })) {
-    if (!v) { console.error("Missing env:", k); process.exit(1); }
+    if (!v) { console.error("Missing env:", k); return; }
   }
   const coins = await sb("tracked_coins?active=eq.true&select=*");
   console.log(`${coins.length} coins tracked`);
@@ -188,5 +192,8 @@ async function checkCoin(coin) {
       else await checkCoin(coin);
     } catch (e) { console.error(`coin ${coin.mint} error:`, e.message); }
   }
-  console.log("done");
-})();
+  console.log("poll done");
+}
+
+module.exports = { runPoll, sb, tg, currentBal, tokenPrice, short };
+if (require.main === module) runPoll();
