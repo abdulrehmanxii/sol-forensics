@@ -137,7 +137,7 @@ function ppConnect() {
 
 /* ---------------- ENRICHER (Movers hard-coded filter) ---------------- */
 async function enrichCoin(mint) {
-  let holders = null, top10 = null, social = null, mcap = null;
+  let holders = null, top10 = null, social = null, mcap = null, image = null, tw = null, tg = null, web = null;
   // supply + top holders (LP/bonding-curve vault >50% ko hata ke)
   try {
     const sup = await rpc("getTokenSupply", [mint]);
@@ -150,22 +150,30 @@ async function enrichCoin(mint) {
       top10 = (t10 / total) * 100;
     }
   } catch (_) {}
-  // metadata: socials + price -> mcap
+  // metadata: image + socials + price -> mcap
   try {
     const a = await rpc("getAsset", { id: mint });
-    const ppt = a && a.token_info && a.token_info.price_info && a.token_info.price_info.price_per_token;
-    const sup2 = a && a.token_info && a.token_info.supply;
-    const dec = a && a.token_info && a.token_info.decimals;
-    if (ppt && sup2 != null && dec != null) mcap = ppt * (Number(sup2) / Math.pow(10, dec));
-    const links = a && a.content && a.content.links;
-    if (links && (links.twitter || links.telegram || links.website || links.external_url)) social = true;
+    const ti = a && a.token_info;
+    const ppt = ti && ti.price_info && ti.price_info.price_per_token;
+    if (ppt && ti.supply != null && ti.decimals != null) mcap = ppt * (Number(ti.supply) / Math.pow(10, ti.decimals));
+    const links = (a && a.content && a.content.links) || {};
+    const files = (a && a.content && a.content.files) || [];
+    image = links.image || (files[0] && (files[0].cdn_uri || files[0].uri)) || null;
+    tw = links.twitter || null; tg = links.telegram || null; web = links.website || links.external_url || null;
     const uri = a && a.content && a.content.json_uri;
-    if (social !== true && uri) {
+    if (uri && (!image || (!tw && !tg && !web))) {
       try {
         const jr = await fetch(uri, { signal: AbortSignal.timeout(4000) });
-        if (jr.ok) { const jj = await jr.json(); const ex = jj.extensions || {}; social = !!(jj.twitter || jj.telegram || jj.website || ex.twitter || ex.telegram || ex.website); }
+        if (jr.ok) {
+          const jj = await jr.json(); const ex = jj.extensions || {};
+          image = image || jj.image || null;
+          tw = tw || jj.twitter || ex.twitter || null;
+          tg = tg || jj.telegram || ex.telegram || null;
+          web = web || jj.website || ex.website || null;
+        }
       } catch (_) {}
     }
+    social = !!(tw || tg || web);
   } catch (_) {}
   // holders count (one page)
   try {
@@ -179,7 +187,7 @@ async function enrichCoin(mint) {
     && (mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX);
 
   await sb(`new_tokens?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal",
-    body: { holders, top10_pct: top10, has_social: social === true, cur_mcap_usd: mcap, is_mover, evaluated_at: new Date().toISOString() } });
+    body: { holders, top10_pct: top10, has_social: social === true, cur_mcap_usd: mcap, image, tw, tg, web, is_mover, evaluated_at: new Date().toISOString() } });
   return is_mover;
 }
 async function enrichLoop() {
