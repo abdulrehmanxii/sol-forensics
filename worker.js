@@ -2,12 +2,18 @@
 // Env: SUPABASE_URL, SUPABASE_KEY, HELIUS_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 // Optional (for instant exits): PUMPPORTAL_API_KEY   ·   POLL_MS (default 30000)
 const WebSocket = require("ws");
-const { runPoll, sb, tg, currentBal, tokenPrice, short } = require("./scripts/poll.js");
+const { runPoll, sb, tg, currentBal, tokenPrice, short, rpc } = require("./scripts/poll.js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const PP_KEY       = process.env.PUMPPORTAL_API_KEY || null;
 const POLL_MS      = Number(process.env.POLL_MS) || 30000;
+const FEED_MIN_DEV_BUY = Number(process.env.FEED_MIN_DEV_BUY) || 1;   // sirf itni+ dev buy wale coins store (DB chhoti rahe)
+const FEED_MIN_MCAP    = Number(process.env.FEED_MIN_MCAP) || 0;
+const MOVER_TOP10_MAX   = Number(process.env.MOVER_TOP10_MAX) || 30;
+const MOVER_MCAP_MIN    = Number(process.env.MOVER_MCAP_MIN) || 7000;
+const MOVER_MCAP_MAX    = Number(process.env.MOVER_MCAP_MAX) || 100000;
+const MOVER_HOLDERS_MIN = Number(process.env.MOVER_HOLDERS_MIN) || 50;
 
 /* ---------------- LISTENER: new tokens (free, 24/7) ---------------- */
 async function feedInsert(rows) {
@@ -41,6 +47,10 @@ function listenerConnect() {
     try {
       const m = JSON.parse(data.toString());
       if (!m || !m.mint) return;
+      const _buy = typeof m.solAmount === "number" ? m.solAmount : 0;
+      const _mc = typeof m.marketCapSol === "number" ? m.marketCapSol : 0;
+      if (_buy < FEED_MIN_DEV_BUY) return;                 // filter: kam dev-buy wale skip
+      if (FEED_MIN_MCAP && _mc < FEED_MIN_MCAP) return;
       feedBatch.push({ mint: m.mint, name: m.name || null, symbol: m.symbol || null, dev: m.traderPublicKey || null,
         initial_buy_sol: typeof m.solAmount === "number" ? m.solAmount : null,
         market_cap_sol: typeof m.marketCapSol === "number" ? m.marketCapSol : null });
@@ -123,6 +133,65 @@ function ppConnect() {
   });
   ppWs.on("close", () => { console.log("trade-stream closed — reconnect 3s"); setTimeout(ppConnect, 3000); });
   ppWs.on("error", (e) => console.error("trade-stream err:", e.message));
+}
+
+/* ---------------- ENRICHER (Movers hard-coded filter) ---------------- */
+async function enrichCoin(mint) {
+  let holders = null, top10 = null, social = null, mcap = null;
+  // supply + top holders (LP/bonding-curve vault >50% ko hata ke)
+  try {
+    const sup = await rpc("getTokenSupply", [mint]);
+    const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
+    const la = await rpc("getTokenLargestAccounts", [mint]);
+    let list = ((la && la.value) || []).map(x => Number(x.uiAmount) || 0);
+    if (total > 0) {
+      list = list.filter(v => (v / total) <= 0.5);
+      const t10 = list.slice(0, 10).reduce((a, v) => a + v, 0);
+      top10 = (t10 / total) * 100;
+    }
+  } catch (_) {}
+  // metadata: socials + price -> mcap
+  try {
+    const a = await rpc("getAsset", { id: mint });
+    const ppt = a && a.token_info && a.token_info.price_info && a.token_info.price_info.price_per_token;
+    const sup2 = a && a.token_info && a.token_info.supply;
+    const dec = a && a.token_info && a.token_info.decimals;
+    if (ppt && sup2 != null && dec != null) mcap = ppt * (Number(sup2) / Math.pow(10, dec));
+    const links = a && a.content && a.content.links;
+    if (links && (links.twitter || links.telegram || links.website || links.external_url)) social = true;
+    const uri = a && a.content && a.content.json_uri;
+    if (social !== true && uri) {
+      try {
+        const jr = await fetch(uri, { signal: AbortSignal.timeout(4000) });
+        if (jr.ok) { const jj = await jr.json(); const ex = jj.extensions || {}; social = !!(jj.twitter || jj.telegram || jj.website || ex.twitter || ex.telegram || ex.website); }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  // holders count (one page)
+  try {
+    const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } });
+    holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null;
+  } catch (_) {}
+
+  const is_mover = (top10 != null && top10 < MOVER_TOP10_MAX)
+    && (social === true)
+    && (holders != null && holders >= MOVER_HOLDERS_MIN)
+    && (mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX);
+
+  await sb(`new_tokens?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal",
+    body: { holders, top10_pct: top10, has_social: social === true, cur_mcap_usd: mcap, is_mover, evaluated_at: new Date().toISOString() } });
+  return is_mover;
+}
+async function enrichLoop() {
+  try {
+    const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+    const stale = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const rows = await sb(`new_tokens?select=mint&created_at=gt.${since}&or=(evaluated_at.is.null,evaluated_at.lt.${stale})&order=created_at.desc&limit=12`);
+    let mv = 0;
+    for (const r of (rows || [])) { if (await enrichCoin(r.mint)) mv++; }
+    if (rows && rows.length) console.log(`enriched ${rows.length}, movers ${mv}`);
+  } catch (e) { console.error("enrich loop err:", e.message); }
+  setTimeout(enrichLoop, 15000);
 }
 
 /* ---------------- POLLER loop (backup / aggregate alerts) ---------------- */
