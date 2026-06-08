@@ -200,13 +200,16 @@ async function enrichCoin(mint) {
 }
 async function enrichLoop() {
   try {
-    const young = new Date(Date.now() - 15 * 60 * 1000).toISOString();   // kam se kam 15 min purana
-    const old = new Date(Date.now() - 6 * 3600 * 1000).toISOString();    // zyada se zyada 6h purana
+    // 1) CURRENT MOVERS ko har loop refresh karo (stale na rahein; range se bahar jaye to nikal jaye)
+    const movers = await sb(`new_tokens?select=mint&is_mover=eq.true&limit=25`);
+    for (const r of (movers || [])) { try { await enrichCoin(r.mint); } catch (_) {} }
+    // 2) DISCOVERY: naye/stale coins evaluate karo (15min-6h window)
+    const young = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const old = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
     const rows = await sb(`new_tokens?select=mint&created_at=lt.${encodeURIComponent(young)}&created_at=gt.${encodeURIComponent(old)}&order=evaluated_at.asc.nullsfirst&limit=15`);
     let n = 0, mv = 0, t = { top: 0, soc: 0, hold: 0, mc: 0 };
     for (const r of (rows || [])) { const d = await enrichCoin(r.mint); n++; if (d.is_mover) mv++; if (d.cTop) t.top++; if (d.cSoc) t.soc++; if (d.cHold) t.hold++; if (d.cMcap) t.mc++; }
-    if (n) console.log(`eval ${n} | mcap_in_range ${t.mc} | holders50 ${t.hold} | top10ok ${t.top} | social ${t.soc} | MOVERS ${mv}`);
-    else console.log("enrich: window mein koi coin nahi");
+    console.log(`movers_refresh ${(movers || []).length} | eval ${n} | mcap_in_range ${t.mc} | holders50 ${t.hold} | top10ok ${t.top} | social ${t.soc} | new_movers ${mv}`);
   } catch (e) { console.error("enrich loop err:", e.message); }
   setTimeout(enrichLoop, 15000);
 }
