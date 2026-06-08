@@ -53,7 +53,8 @@ function listenerConnect() {
       if (FEED_MIN_MCAP && _mc < FEED_MIN_MCAP) return;
       feedBatch.push({ mint: m.mint, name: m.name || null, symbol: m.symbol || null, dev: m.traderPublicKey || null,
         initial_buy_sol: typeof m.solAmount === "number" ? m.solAmount : null,
-        market_cap_sol: typeof m.marketCapSol === "number" ? m.marketCapSol : null });
+        market_cap_sol: typeof m.marketCapSol === "number" ? m.marketCapSol : null,
+        bonding_curve: m.bondingCurveKey || null });
       if (feedBatch.length >= 25) feedFlush();
     } catch (_) {}
   });
@@ -135,32 +136,53 @@ function ppConnect() {
   ppWs.on("error", (e) => console.error("trade-stream err:", e.message));
 }
 
-/* ---------------- ENRICHER (Movers hard-coded filter) ---------------- */
-async function enrichCoin(mint) {
-  let holders = null, top10 = null, social = false, mcap = null, image = null, tw = null, tg = null, web = null;
-  // --- FREE: DexScreener (mcap=fdv + social + image) ---
+/* ---------------- ENRICHER (Movers — on-chain bonding curve mcap) ---------------- */
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+async function solPriceUsd() {
+  try {
+    const r = await fetch(`https://lite-api.jup.ag/price/v2?ids=${SOL_MINT}`);
+    if (r.ok) { const j = await r.json(); const p = j.data && j.data[SOL_MINT] && j.data[SOL_MINT].price; return Number(p) || null; }
+  } catch (_) {}
+  return null;
+}
+// pump.fun bonding curve account decode -> mcap USD (null agar graduated/invalid)
+function curveMcapUsd(b64, solPrice) {
+  try {
+    const buf = Buffer.from(b64, "base64");
+    if (buf.length < 49) return null;
+    const vTok = Number(buf.readBigUInt64LE(8));
+    const vSol = Number(buf.readBigUInt64LE(16));
+    const totalSupply = Number(buf.readBigUInt64LE(40));
+    const complete = buf.readUInt8(48) === 1;
+    if (complete || !vTok || !vSol || !totalSupply) return null; // graduated/invalid -> dexscreener fallback
+    const priceSol = (vSol / 1e9) / (vTok / 1e6);   // SOL per token
+    const mcapSol = priceSol * (totalSupply / 1e6);
+    return solPrice ? mcapSol * solPrice : null;
+  } catch (_) { return null; }
+}
+async function dexFallback(mint) {
   try {
     const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, { signal: AbortSignal.timeout(5000) });
-    if (r.ok) {
-      const j = await r.json(); const pairs = (j && j.pairs) || [];
-      if (pairs.length) {
-        pairs.sort((a, b) => (((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0)));
-        const p = pairs[0]; const info = p.info || {};
-        mcap = Number(p.fdv || p.marketCap) || null;     // fdv = pump.fun style mcap
-        image = info.imageUrl || null;
-        const socials = info.socials || [];
-        tw = (socials.find(x => /twitter|^x$/i.test(x.type || "")) || {}).url || null;
-        tg = (socials.find(x => /telegram/i.test(x.type || "")) || {}).url || null;
-        web = (info.websites && info.websites[0] && info.websites[0].url) || null;
-        social = !!(tw || tg || web);
-      }
-    }
-  } catch (_) {}
-
-  const inRange = mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX;
-  // GATE: Helius sirf in-range coins pe (range coins kam hote hain -> credits safe)
-  if (inRange) {
-    // metadata se reliable social + image (DexScreener aksar social miss karta)
+    if (!r.ok) return {};
+    const j = await r.json(); const pairs = (j && j.pairs) || [];
+    if (!pairs.length) return {};
+    pairs.sort((a, b) => (((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0)));
+    const p = pairs[0]; const info = p.info || {};
+    const socials = info.socials || [];
+    return {
+      mcap: Number(p.fdv || p.marketCap) || null,
+      image: info.imageUrl || null,
+      tw: (socials.find(x => /twitter|^x$/i.test(x.type || "")) || {}).url || null,
+      tg: (socials.find(x => /telegram/i.test(x.type || "")) || {}).url || null,
+      web: (info.websites && info.websites[0] && info.websites[0].url) || null,
+    };
+  } catch (_) { return {}; }
+}
+// in-range coin ka social/image (metadata) + holders + top10 (Helius)
+async function deepCheck(mint, pre) {
+  let { image = null, tw = null, tg = null, web = null } = pre || {};
+  let social = !!(tw || tg || web), holders = null, top10 = null;
+  if (!social || !image) {
     try {
       const a = await rpc("getAsset", { id: mint });
       const links = (a && a.content && a.content.links) || {}; const files = (a && a.content && a.content.files) || [];
@@ -172,44 +194,60 @@ async function enrichCoin(mint) {
       }
       social = !!(tw || tg || web);
     } catch (_) {}
-    // sirf agar social mila -> holders + top10 (heavy calls bachao)
-    if (social) {
-      try {
-        const sup = await rpc("getTokenSupply", [mint]);
-        const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
-        const la = await rpc("getTokenLargestAccounts", [mint]);
-        let list = ((la && la.value) || []).map(x => Number(x.uiAmount) || 0);
-        if (total > 0) { list = list.filter(v => (v / total) <= 0.5); top10 = (list.slice(0, 10).reduce((a, v) => a + v, 0) / total) * 100; }
-      } catch (_) {}
-      try {
-        const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } });
-        holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null;
-      } catch (_) {}
-    }
   }
-
-  const cMcap = inRange;
-  const cSoc = social === true;
-  const cTop = top10 != null && top10 < MOVER_TOP10_MAX;
-  const cHold = holders != null && holders >= MOVER_HOLDERS_MIN;
+  if (social) {
+    try {
+      const sup = await rpc("getTokenSupply", [mint]);
+      const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
+      const la = await rpc("getTokenLargestAccounts", [mint]);
+      let list = ((la && la.value) || []).map(x => Number(x.uiAmount) || 0);
+      if (total > 0) { list = list.filter(v => (v / total) <= 0.5); top10 = (list.slice(0, 10).reduce((a, v) => a + v, 0) / total) * 100; }
+    } catch (_) {}
+    try { const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } }); holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null; } catch (_) {}
+  }
+  return { image, tw, tg, web, social, holders, top10 };
+}
+async function evalOne(coin, mcap) {
+  const mint = coin.mint;
+  let image = null, tw = null, tg = null, web = null, social = false, holders = null, top10 = null;
+  // agar curve se mcap nahi mila (graduated/old) -> DexScreener fallback
+  if (mcap == null) { const d = await dexFallback(mint); mcap = d.mcap != null ? d.mcap : null; image = d.image; tw = d.tw; tg = d.tg; web = d.web; social = !!(tw || tg || web); }
+  const inRange = mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX;
+  if (inRange) {
+    const dc = await deepCheck(mint, { image, tw, tg, web });
+    image = dc.image; tw = dc.tw; tg = dc.tg; web = dc.web; social = dc.social; holders = dc.holders; top10 = dc.top10;
+  }
+  const cMcap = inRange, cSoc = social === true, cTop = top10 != null && top10 < MOVER_TOP10_MAX, cHold = holders != null && holders >= MOVER_HOLDERS_MIN;
   const is_mover = cMcap && cSoc && cTop && cHold;
-
   await sb(`new_tokens?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal",
     body: { holders, top10_pct: top10, has_social: social, cur_mcap_usd: mcap, image, tw, tg, web, is_mover, evaluated_at: new Date().toISOString() } });
   return { is_mover, cTop, cSoc, cHold, cMcap };
 }
 async function enrichLoop() {
   try {
-    // 1) CURRENT MOVERS ko har loop refresh karo (stale na rahein; range se bahar jaye to nikal jaye)
-    const movers = await sb(`new_tokens?select=mint&is_mover=eq.true&limit=25`);
-    for (const r of (movers || [])) { try { await enrichCoin(r.mint); } catch (_) {} }
-    // 2) DISCOVERY: naye/stale coins evaluate karo (15min-6h window)
-    const young = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const old = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
-    const rows = await sb(`new_tokens?select=mint&created_at=lt.${encodeURIComponent(young)}&created_at=gt.${encodeURIComponent(old)}&order=evaluated_at.asc.nullsfirst&limit=15`);
-    let n = 0, mv = 0, t = { top: 0, soc: 0, hold: 0, mc: 0 };
-    for (const r of (rows || [])) { const d = await enrichCoin(r.mint); n++; if (d.is_mover) mv++; if (d.cTop) t.top++; if (d.cSoc) t.soc++; if (d.cHold) t.hold++; if (d.cMcap) t.mc++; }
-    console.log(`movers_refresh ${(movers || []).length} | eval ${n} | mcap_in_range ${t.mc} | holders50 ${t.hold} | top10ok ${t.top} | social ${t.soc} | new_movers ${mv}`);
+    const sol = await solPriceUsd();
+    const young = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const old = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
+    const movers = await sb(`new_tokens?select=mint,bonding_curve&is_mover=eq.true&limit=25`);
+    const disc = await sb(`new_tokens?select=mint,bonding_curve&created_at=lt.${encodeURIComponent(young)}&created_at=gt.${encodeURIComponent(old)}&order=evaluated_at.asc.nullsfirst&limit=300`);
+    const all = [...(movers || []), ...(disc || [])];
+    // batch read bonding curves (100 per call) -> mcap map
+    const curveMap = {};
+    const withCurve = all.filter(c => c.bonding_curve);
+    for (let i = 0; i < withCurve.length; i += 100) {
+      const slice = withCurve.slice(i, i + 100);
+      try {
+        const res = await rpc("getMultipleAccounts", [slice.map(c => c.bonding_curve), { encoding: "base64" }]);
+        const vals = (res && res.value) || [];
+        slice.forEach((c, idx) => { const acc = vals[idx]; const b64 = acc && acc.data && acc.data[0]; if (b64) { const mc = curveMcapUsd(b64, sol); if (mc != null) curveMap[c.mint] = mc; } });
+      } catch (e) { console.error("getMultipleAccounts err:", e.message); }
+    }
+    let n = 0, mv = 0, t = { mc: 0, soc: 0, hold: 0, top: 0 };
+    for (const c of all) {
+      const d = await evalOne(c, curveMap[c.mint] != null ? curveMap[c.mint] : null);
+      n++; if (d.is_mover) mv++; if (d.cMcap) t.mc++; if (d.cSoc) t.soc++; if (d.cHold) t.hold++; if (d.cTop) t.top++;
+    }
+    console.log(`sol $${sol} | processed ${n} | curve_mcaps ${Object.keys(curveMap).length} | in_range ${t.mc} | social ${t.soc} | holders50 ${t.hold} | top10ok ${t.top} | movers_now ${mv}`);
   } catch (e) { console.error("enrich loop err:", e.message); }
   setTimeout(enrichLoop, 15000);
 }
