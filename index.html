@@ -320,7 +320,7 @@ function renderControls(){
     if(feedTimer){clearInterval(feedTimer);feedTimer=null;}
     feedView="movers";
     const f=getFeedFilter(feedView);
-    $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="fSearch" placeholder="search (optional)" value="${esc(f.search||'')}"/><button class="go" onclick="applyFeedFilter()">GO</button></div><div class="mut" style="font-size:10px;margin-bottom:6px">Filter: MC $7K–100K · holders ≥50 · top10 &lt;30% · social ✓ · auto 10s</div>`;
+    $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="fSearch" placeholder="search (optional)" value="${esc(f.search||'')}"/><button class="go" onclick="applyFeedFilter()">GO</button></div><div class="mut" style="font-size:10px;margin-bottom:6px">Filter: MC $6K–100K · holders ≥50 · top10 &lt;30% · social ✓ · auto 10s</div>`;
     feedTimer=setInterval(runFeed,10000);
     runFeed();
   }
