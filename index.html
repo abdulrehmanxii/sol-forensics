@@ -147,6 +147,9 @@
   .fmc{color:var(--cy);font-weight:600;}
   .ftrack{flex-shrink:0;background:var(--em);color:#06281a;border:0;border-radius:8px;padding:8px 12px;font-weight:700;font-size:11px;cursor:pointer;}
   .ftrack:disabled{opacity:.6;}
+  img.fic{object-fit:cover;}
+  .slink{color:var(--cy);text-decoration:none;font-size:13px;margin-left:5px;}
+  .slink:hover{color:var(--em);}
 </style>
 </head>
 <body>
@@ -710,12 +713,17 @@ function renderFeed(rows){
     const nm=esc((t.name||"").slice(0,20));
     const init=esc(sy.slice(0,3).toUpperCase());
     const hue=[...t.mint].reduce((a,c)=>a+c.charCodeAt(0),0)%360;
+    const img=t.image?String(t.image).replace(/['"]/g,""):"";
+    const icon=img?`<div class="fic" style="background:hsl(${hue} 70% 60%) center/cover url('${img}')"></div>`:`<div class="fic" style="background:hsl(${hue} 70% 60%)">${init}</div>`;
     const age=t.created_at?timeAgo(t.created_at):"";
     const mc=t.cur_mcap_usd!=null?"$"+fmtK(t.cur_mcap_usd):"?";
     const hold=t.holders!=null?t.holders:"—";
     const t10=t.top10_pct!=null?Math.round(t.top10_pct)+"%":"—";
-    const soc=t.has_social?"🌐":"";
-    h+=`<div class="fcard"><div class="fic" style="background:hsl(${hue} 70% 60%)">${init}</div><div class="fmain"><div class="frow1"><span class="ftk">${esc(sy)}</span><span class="fnm">${nm}</span> ${soc}</div><div class="frow2">${age} · MC <span class="fmc">${mc}</span> · 👤${hold} · top10 ${t10}</div></div><button class="ftrack" onclick="feedTrack('${t.mint}','${esc(sy)}',this)">+ Track</button></div>`;
+    let soc="";
+    if(t.tw)soc+=`<a class="slink" href="${esc(t.tw)}" target="_blank">𝕏</a>`;
+    if(t.tg)soc+=`<a class="slink" href="${esc(t.tg)}" target="_blank">✈️</a>`;
+    if(t.web)soc+=`<a class="slink" href="${esc(t.web)}" target="_blank">🌐</a>`;
+    h+=`<div class="fcard">${icon}<div class="fmain"><div class="frow1"><a class="ftk" href="https://pump.fun/${t.mint}" target="_blank" style="text-decoration:none">${esc(sy)}</a><span class="fnm">${nm}</span>${soc}</div><div class="frow2">${age} · MC <span class="fmc">${mc}</span> · 👤${hold} · top10 ${t10}</div></div><button class="ftrack" onclick="feedTrack('${t.mint}','${esc(sy)}',this)">+ Track</button></div>`;
   });
   $("out").innerHTML=h;
 }
