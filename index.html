@@ -137,6 +137,16 @@
   footer b{color:var(--txt);font-family:"Chakra Petch",sans-serif;letter-spacing:.5px;}
   footer .tg{display:inline-flex;align-items:center;gap:6px;margin-top:6px;color:var(--cy);text-decoration:none;}
   footer .tg:hover{text-decoration:underline;}
+  .fcard{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:7px;}
+  .fic{width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#0a0a0a;flex-shrink:0;}
+  .fmain{flex:1;min-width:0;}
+  .frow1{display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden;}
+  .ftk{font-weight:700;font-size:14px;color:var(--txt);}
+  .fnm{font-size:11px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;}
+  .frow2{font-size:10px;color:var(--mut);margin-top:3px;}
+  .fmc{color:var(--cy);font-weight:600;}
+  .ftrack{flex-shrink:0;background:var(--em);color:#06281a;border:0;border-radius:8px;padding:8px 12px;font-weight:700;font-size:11px;cursor:pointer;}
+  .ftrack:disabled{opacity:.6;}
 </style>
 </head>
 <body>
@@ -305,8 +315,9 @@ function renderControls(){
     $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="addr" placeholder="Start wallet address"/><select id="depth"><option value="2">2 hops</option><option value="3" selected>3 hops</option><option value="4">4 hops</option><option value="5">5 hops</option></select><button class="go" id="goBtn">TRACE</button></div>`;
   else if(mode==="feed"){
     if(feedTimer){clearInterval(feedTimer);feedTimer=null;}
+    feedView="movers";
     const f=getFeedFilter(feedView);
-    $("controls").innerHTML=`<div style="display:flex;gap:6px;margin-bottom:8px"><button class="mode ${feedView==='movers'?'on':''}" style="flex:1" onclick="setFeedView('movers')">🔥 Movers</button><button class="mode ${feedView==='pairs'?'on':''}" style="flex:1" onclick="setFeedView('pairs')">🆕 New Pairs</button></div><div class="field"><span class="ic">🔎</span><input id="fSearch" placeholder="naam/symbol (optional)" value="${esc(f.search||'')}"/></div><div style="display:flex;gap:8px;margin-bottom:6px"><div class="field" style="flex:1;margin:0"><span class="ic">📊</span><input id="fMcap" type="number" placeholder="min mcap (SOL)" value="${f.mcap||''}"/></div><div class="field" style="flex:1;margin:0"><span class="ic">💰</span><input id="fBuy" type="number" placeholder="min dev buy (SOL)" value="${f.buy||''}"/></div><button class="go" onclick="applyFeedFilter()">SET</button></div>`;
+    $("controls").innerHTML=`<div class="field"><span class="ic">🔎</span><input id="fSearch" placeholder="search (optional)" value="${esc(f.search||'')}"/><button class="go" onclick="applyFeedFilter()">GO</button></div><div class="mut" style="font-size:10px;margin-bottom:6px">Filter: MC $7K–100K · holders ≥50 · top10 &lt;30% · social ✓ · auto 10s</div>`;
     feedTimer=setInterval(runFeed,10000);
     runFeed();
   }
@@ -674,13 +685,14 @@ function getFeedFilter(v){try{const x=localStorage.getItem(v==="movers"?"sfp_mov
 function saveFeedFilter(v,fl){try{localStorage.setItem(v==="movers"?"sfp_movers":"sfp_pairs",JSON.stringify(fl));}catch(_){}}
 window.setFeedView=function(v){feedView=v;try{localStorage.setItem("sfp_feedview",v);}catch(_){}renderControls();};
 window.applyFeedFilter=function(){const fl={search:$("fSearch")?$("fSearch").value.trim():"",mcap:Number($("fMcap")&&$("fMcap").value)||0,buy:Number($("fBuy")&&$("fBuy").value)||0};saveFeedFilter(feedView,fl);runFeed();};
+function fmtK(n){n=Number(n)||0;return n>=1000?(n/1000).toFixed(1)+"K":Math.round(n).toString();}
 function timeAgo(iso){const x=Math.floor((Date.now()-new Date(iso).getTime())/1000);if(x<60)return x+"s";if(x<3600)return Math.floor(x/60)+"m";return Math.floor(x/3600)+"h";}
 window.runFeed=async function(){
   if(!ACCESS()){showErr("Access code daalo.");if(feedTimer){clearInterval(feedTimer);feedTimer=null;}return;}
   const f=getFeedFilter(feedView);
   const firstLoad=!$("out").innerHTML;
   if(firstLoad)prog("Loading "+(feedView==="movers"?"movers":"new pairs")+"...");
-  const body={search:f.search||"",minMcap:f.mcap||0,minDevBuy:f.buy||0,limit:60};
+  const body={movers:true,search:f.search||"",limit:60};
   try{
     const res=await fetch("/api/feed",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify(body)});
     const j=await res.json();
@@ -690,27 +702,28 @@ window.runFeed=async function(){
   finally{prog("");}
 };
 function renderFeed(rows){
-  const label=feedView==="movers"?"🔥 MOVERS":"🆕 NEW PAIRS";
   const now=new Date().toLocaleTimeString();
-  if(!rows||!rows.length){$("out").innerHTML='<div class="empty">Is filter pe abhi koi coin nahi. Filter loosen karke SET dabao. (Auto-refresh ON)</div>';return;}
-  let h=`<div class="card"><div class="h cy">${label} <span class="mut" style="font-weight:400;font-size:10px">— ${rows.length} coins · auto 10s · ${now}</span></div>`;
+  if(!rows||!rows.length){$("out").innerHTML='<div class="empty">Abhi koi mover nahi mila (filter strict hai + worker evaluate kar raha). Thodi der do. Auto 10s.</div>';return;}
+  let h=`<div class="h cy" style="margin-bottom:8px">🔥 MOVERS <span class="mut" style="font-weight:400;font-size:10px">— ${rows.length} · auto 10s · ${now}</span></div>`;
   rows.forEach(t=>{
-    const sy=(t.symbol||"").replace(/['"]/g,"");
-    h+=`<div class="holder">
-      <a class="tok" href="${tokUrl(t.mint)}" target="_blank">${esc(sy||short(t.mint,5))}</a>
-      <span class="mut" style="font-size:10px">${esc((t.name||"").slice(0,16))}</span>
-      <span class="mut" style="font-size:10px">mc ${t.market_cap_sol!=null?fmt(t.market_cap_sol,1):'?'}◎ · dev ${t.initial_buy_sol!=null?fmt(t.initial_buy_sol,2):'?'}◎ · ${t.created_at?timeAgo(t.created_at):''}</span>
-      <button class="badge buy" style="margin-left:auto;cursor:pointer;border:0;padding:3px 8px" onclick="feedTrack('${t.mint}','${sy}',this)">+ TRACK</button>
-    </div>`;
+    const sy=((t.symbol||"").replace(/['"]/g,""))||short(t.mint,4);
+    const nm=esc((t.name||"").slice(0,20));
+    const init=esc(sy.slice(0,3).toUpperCase());
+    const hue=[...t.mint].reduce((a,c)=>a+c.charCodeAt(0),0)%360;
+    const age=t.created_at?timeAgo(t.created_at):"";
+    const mc=t.cur_mcap_usd!=null?"$"+fmtK(t.cur_mcap_usd):"?";
+    const hold=t.holders!=null?t.holders:"—";
+    const t10=t.top10_pct!=null?Math.round(t.top10_pct)+"%":"—";
+    const soc=t.has_social?"🌐":"";
+    h+=`<div class="fcard"><div class="fic" style="background:hsl(${hue} 70% 60%)">${init}</div><div class="fmain"><div class="frow1"><span class="ftk">${esc(sy)}</span><span class="fnm">${nm}</span> ${soc}</div><div class="frow2">${age} · MC <span class="fmc">${mc}</span> · 👤${hold} · top10 ${t10}</div></div><button class="ftrack" onclick="feedTrack('${t.mint}','${esc(sy)}',this)">+ Track</button></div>`;
   });
-  h+=`</div>`;
   $("out").innerHTML=h;
 }
 window.feedTrack=async function(mint,symbol,btn){
   try{btn.textContent="...";
     const res=await fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json","x-access":ACCESS()},body:JSON.stringify({mint,symbol})});
     const j=await res.json();if(!res.ok)throw new Error(j.error||res.status);
-    btn.textContent="\u2713 TRACKING";btn.disabled=true;
+    btn.textContent="✓ ON";btn.disabled=true;
   }catch(e){btn.textContent="fail";}
 };
 
