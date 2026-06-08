@@ -138,7 +138,7 @@ function ppConnect() {
 /* ---------------- ENRICHER (Movers hard-coded filter) ---------------- */
 async function enrichCoin(mint) {
   let holders = null, top10 = null, social = false, mcap = null, image = null, tw = null, tg = null, web = null;
-  // --- FREE: DexScreener (mcap + social + image) ---
+  // --- FREE: DexScreener (mcap=fdv + social + image) ---
   try {
     const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, { signal: AbortSignal.timeout(5000) });
     if (r.ok) {
@@ -146,7 +146,7 @@ async function enrichCoin(mint) {
       if (pairs.length) {
         pairs.sort((a, b) => (((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0)));
         const p = pairs[0]; const info = p.info || {};
-        mcap = Number(p.marketCap || p.fdv) || null;
+        mcap = Number(p.fdv || p.marketCap) || null;     // fdv = pump.fun style mcap
         image = info.imageUrl || null;
         const socials = info.socials || [];
         tw = (socials.find(x => /twitter|^x$/i.test(x.type || "")) || {}).url || null;
@@ -158,8 +158,8 @@ async function enrichCoin(mint) {
   } catch (_) {}
 
   const inRange = mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX;
-  // GATE: sirf in-range coins pe Helius kharch karo (credits bachao)
-  if (inRange) {
+  // GATE: Helius sirf jab mcap range + social dono (dono free se) pass — credits bachao
+  if (inRange && social) {
     try {
       const sup = await rpc("getTokenSupply", [mint]);
       const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
@@ -171,26 +171,13 @@ async function enrichCoin(mint) {
       const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } });
       holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null;
     } catch (_) {}
-    if (!social || !image) {
-      try {
-        const a = await rpc("getAsset", { id: mint });
-        const links = (a && a.content && a.content.links) || {}; const files = (a && a.content && a.content.files) || [];
-        image = image || links.image || (files[0] && (files[0].cdn_uri || files[0].uri)) || null;
-        tw = tw || links.twitter || null; tg = tg || links.telegram || null; web = web || links.website || links.external_url || null;
-        const uri = a && a.content && a.content.json_uri;
-        if (!(tw || tg || web) && uri) {
-          try { const jr = await fetch(uri, { signal: AbortSignal.timeout(4000) }); if (jr.ok) { const jj = await jr.json(); const ex = jj.extensions || {}; tw = tw || jj.twitter || ex.twitter || null; tg = tg || jj.telegram || ex.telegram || null; web = web || jj.website || ex.website || null; image = image || jj.image || null; } } catch (_) {}
-        }
-        social = !!(tw || tg || web);
-      } catch (_) {}
-    }
   }
 
-  const cTop = top10 != null && top10 < MOVER_TOP10_MAX;
-  const cSoc = social === true;
-  const cHold = holders != null && holders >= MOVER_HOLDERS_MIN;
   const cMcap = inRange;
-  const is_mover = cTop && cSoc && cHold && cMcap;
+  const cSoc = social === true;
+  const cTop = top10 != null && top10 < MOVER_TOP10_MAX;
+  const cHold = holders != null && holders >= MOVER_HOLDERS_MIN;
+  const is_mover = cMcap && cSoc && cTop && cHold;
 
   await sb(`new_tokens?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal",
     body: { holders, top10_pct: top10, has_social: social, cur_mcap_usd: mcap, image, tw, tg, web, is_mover, evaluated_at: new Date().toISOString() } });
