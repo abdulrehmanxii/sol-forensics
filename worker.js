@@ -216,6 +216,8 @@ async function pollLoop() {
   setInterval(feedFlush, 3000);
   setInterval(feedPrune, 6 * 60 * 60 * 1000);
   pollLoop();
+  enrichLoop();                           // <-- MOVERS enricher (ye missing tha)
+  console.log("ENRICHER loop started");
   if (PP_KEY) { ppConnect(); setInterval(refreshSubs, 60000); console.log("INSTANT mode ON"); }
   else { console.log("INSTANT mode OFF (PUMPPORTAL_API_KEY not set) — using poll every " + POLL_MS + "ms"); }
   console.log("WORKER UP — listener + poller" + (PP_KEY ? " + instant trade-stream" : ""));
