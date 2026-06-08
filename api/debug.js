@@ -25,6 +25,13 @@ module.exports = async (req, res) => {
     const evaluated = await count(`evaluated_at=not.is.null`);
     const movers = await count(`is_mover=eq.true`);
 
+    // probe: kya saare enricher columns DB mein hain?
+    let colsOk = true, colErr = null;
+    try {
+      const pr = await fetch(`${URL}/rest/v1/new_tokens?select=image,tw,tg,web,holders,top10_pct,has_social,cur_mcap_usd,is_mover,evaluated_at&limit=1`, { headers: H });
+      if (!pr.ok) { colsOk = false; colErr = (await pr.text()).slice(0, 200); }
+    } catch (e) { colsOk = false; colErr = String(e.message); }
+
     const nr = await fetch(`${URL}/rest/v1/new_tokens?select=symbol,created_at,evaluated_at,holders,top10_pct,has_social,cur_mcap_usd,is_mover&order=created_at.desc&limit=5`, { headers: H });
     const newest = await nr.json();
 
@@ -32,6 +39,8 @@ module.exports = async (req, res) => {
     res.status(200).json({
       LISTENER: { total_coins: total, last_1h: last1, last_24h: last24, healthy: last1 > 0 ? "YES (coins aa rahe)" : "NO (listener band? worker check karo)" },
       ENRICHER: { evaluated_total: evaluated, movers_total: movers, working: evaluated > 0 ? "YES" : "NO (enricher nahi chala / new code deploy nahi hua)" },
+      COLUMNS_ALL_PRESENT: colsOk ? "YES" : "NO — ye SQL chalao!",
+      COLUMNS_ERROR: colErr,
       newest_5: newest,
     });
   } catch (e) { res.status(502).json({ error: String((e && e.message) || e) }); }
