@@ -8,7 +8,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const PP_KEY       = process.env.PUMPPORTAL_API_KEY || null;
 const POLL_MS      = Number(process.env.POLL_MS) || 30000;
-const FEED_MIN_DEV_BUY = Number(process.env.FEED_MIN_DEV_BUY) || 1;   // sirf itni+ dev buy wale coins store (DB chhoti rahe)
+const FEED_MIN_DEV_BUY = Number(process.env.FEED_MIN_DEV_BUY) || 0;   // 0 = sab store (movers filter strict hai); Railway env se badha sakte ho
 const FEED_MIN_MCAP    = Number(process.env.FEED_MIN_MCAP) || 0;
 const MOVER_TOP10_MAX   = Number(process.env.MOVER_TOP10_MAX) || 30;
 const MOVER_MCAP_MIN    = Number(process.env.MOVER_MCAP_MIN) || 7000;
@@ -136,68 +136,63 @@ function ppConnect() {
 }
 
 /* ---------------- ENRICHER (Movers hard-coded filter) ---------------- */
+async function dexMcap(mint) {
+  try {
+    const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const pairs = (j && j.pairs) || [];
+    if (!pairs.length) return null;
+    pairs.sort((a, b) => (((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0)));
+    const p = pairs[0];
+    return Number(p.marketCap || p.fdv) || null;
+  } catch (_) { return null; }
+}
 async function enrichCoin(mint) {
   let holders = null, top10 = null, social = null, mcap = null, image = null, tw = null, tg = null, web = null;
-  // supply + top holders (LP/bonding-curve vault >50% ko hata ke)
   try {
     const sup = await rpc("getTokenSupply", [mint]);
     const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
     const la = await rpc("getTokenLargestAccounts", [mint]);
     let list = ((la && la.value) || []).map(x => Number(x.uiAmount) || 0);
-    if (total > 0) {
-      list = list.filter(v => (v / total) <= 0.5);
-      const t10 = list.slice(0, 10).reduce((a, v) => a + v, 0);
-      top10 = (t10 / total) * 100;
-    }
+    if (total > 0) { list = list.filter(v => (v / total) <= 0.5); top10 = (list.slice(0, 10).reduce((a, v) => a + v, 0) / total) * 100; }
   } catch (_) {}
-  // metadata: image + socials + price -> mcap
   try {
     const a = await rpc("getAsset", { id: mint });
-    const ti = a && a.token_info;
-    const ppt = ti && ti.price_info && ti.price_info.price_per_token;
-    if (ppt && ti.supply != null && ti.decimals != null) mcap = ppt * (Number(ti.supply) / Math.pow(10, ti.decimals));
     const links = (a && a.content && a.content.links) || {};
     const files = (a && a.content && a.content.files) || [];
     image = links.image || (files[0] && (files[0].cdn_uri || files[0].uri)) || null;
     tw = links.twitter || null; tg = links.telegram || null; web = links.website || links.external_url || null;
     const uri = a && a.content && a.content.json_uri;
     if (uri && (!image || (!tw && !tg && !web))) {
-      try {
-        const jr = await fetch(uri, { signal: AbortSignal.timeout(4000) });
-        if (jr.ok) {
-          const jj = await jr.json(); const ex = jj.extensions || {};
-          image = image || jj.image || null;
-          tw = tw || jj.twitter || ex.twitter || null;
-          tg = tg || jj.telegram || ex.telegram || null;
-          web = web || jj.website || ex.website || null;
-        }
-      } catch (_) {}
+      try { const jr = await fetch(uri, { signal: AbortSignal.timeout(4000) }); if (jr.ok) { const jj = await jr.json(); const ex = jj.extensions || {}; image = image || jj.image || null; tw = tw || jj.twitter || ex.twitter || null; tg = tg || jj.telegram || ex.telegram || null; web = web || jj.website || ex.website || null; } } catch (_) {}
     }
-    social = !!(tw || tg || web);
+    const ti = a && a.token_info;
+    if (ti && ti.price_info && ti.price_info.price_per_token && ti.supply != null && ti.decimals != null) mcap = ti.price_info.price_per_token * (Number(ti.supply) / Math.pow(10, ti.decimals));
   } catch (_) {}
-  // holders count (one page)
-  try {
-    const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } });
-    holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null;
-  } catch (_) {}
+  social = !!(tw || tg || web);
+  const dm = await dexMcap(mint);
+  if (dm != null) mcap = dm;
+  try { const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } }); holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null; } catch (_) {}
 
-  const is_mover = (top10 != null && top10 < MOVER_TOP10_MAX)
-    && (social === true)
-    && (holders != null && holders >= MOVER_HOLDERS_MIN)
-    && (mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX);
+  const cTop = top10 != null && top10 < MOVER_TOP10_MAX;
+  const cSoc = social === true;
+  const cHold = holders != null && holders >= MOVER_HOLDERS_MIN;
+  const cMcap = mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX;
+  const is_mover = cTop && cSoc && cHold && cMcap;
 
   await sb(`new_tokens?mint=eq.${mint}`, { method: "PATCH", prefer: "return=minimal",
     body: { holders, top10_pct: top10, has_social: social === true, cur_mcap_usd: mcap, image, tw, tg, web, is_mover, evaluated_at: new Date().toISOString() } });
-  return is_mover;
+  return { is_mover, cTop, cSoc, cHold, cMcap };
 }
 async function enrichLoop() {
   try {
-    const since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const stale = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const rows = await sb(`new_tokens?select=mint&created_at=gt.${since}&or=(evaluated_at.is.null,evaluated_at.lt.${stale})&order=created_at.desc&limit=12`);
-    let mv = 0;
-    for (const r of (rows || [])) { if (await enrichCoin(r.mint)) mv++; }
-    if (rows && rows.length) console.log(`enriched ${rows.length}, movers ${mv}`);
+    let n = 0, mv = 0, t = { top: 0, soc: 0, hold: 0, mc: 0 };
+    for (const r of (rows || [])) { const d = await enrichCoin(r.mint); n++; if (d.is_mover) mv++; if (d.cTop) t.top++; if (d.cSoc) t.soc++; if (d.cHold) t.hold++; if (d.cMcap) t.mc++; }
+    if (n) console.log(`eval ${n} | top10ok ${t.top} | social ${t.soc} | holders50 ${t.hold} | mcap_in_range ${t.mc} | MOVERS ${mv}`);
   } catch (e) { console.error("enrich loop err:", e.message); }
   setTimeout(enrichLoop, 15000);
 }
