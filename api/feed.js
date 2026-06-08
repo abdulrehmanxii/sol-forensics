@@ -14,8 +14,12 @@ module.exports = async (req, res) => {
   const limit = Math.min(Number(body.limit) || 60, 100);
 
   let q = `new_tokens?select=*&order=created_at.desc&limit=${limit}`;
-  if (minMcap > 0) q += `&market_cap_sol=gte.${minMcap}`;
-  if (minBuy > 0) q += `&initial_buy_sol=gte.${minBuy}`;
+  if (body.movers) {
+    q += `&is_mover=eq.true`;
+  } else {
+    if (minMcap > 0) q += `&market_cap_sol=gte.${minMcap}`;
+    if (minBuy > 0) q += `&initial_buy_sol=gte.${minBuy}`;
+  }
   if (search) { const s = encodeURIComponent(`*${search}*`); q += `&or=(name.ilike.${s},symbol.ilike.${s})`; }
 
   try {
