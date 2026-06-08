@@ -11,7 +11,7 @@ const POLL_MS      = Number(process.env.POLL_MS) || 30000;
 const FEED_MIN_DEV_BUY = Number(process.env.FEED_MIN_DEV_BUY) || 0;   // 0 = sab store (movers filter strict hai); Railway env se badha sakte ho
 const FEED_MIN_MCAP    = Number(process.env.FEED_MIN_MCAP) || 0;
 const MOVER_TOP10_MAX   = Number(process.env.MOVER_TOP10_MAX) || 30;
-const MOVER_MCAP_MIN    = Number(process.env.MOVER_MCAP_MIN) || 7000;
+const MOVER_MCAP_MIN    = Number(process.env.MOVER_MCAP_MIN) || 6000;
 const MOVER_MCAP_MAX    = Number(process.env.MOVER_MCAP_MAX) || 100000;
 const MOVER_HOLDERS_MIN = Number(process.env.MOVER_HOLDERS_MIN) || 50;
 
