@@ -158,19 +158,34 @@ async function enrichCoin(mint) {
   } catch (_) {}
 
   const inRange = mcap != null && mcap >= MOVER_MCAP_MIN && mcap <= MOVER_MCAP_MAX;
-  // GATE: Helius sirf jab mcap range + social dono (dono free se) pass — credits bachao
-  if (inRange && social) {
+  // GATE: Helius sirf in-range coins pe (range coins kam hote hain -> credits safe)
+  if (inRange) {
+    // metadata se reliable social + image (DexScreener aksar social miss karta)
     try {
-      const sup = await rpc("getTokenSupply", [mint]);
-      const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
-      const la = await rpc("getTokenLargestAccounts", [mint]);
-      let list = ((la && la.value) || []).map(x => Number(x.uiAmount) || 0);
-      if (total > 0) { list = list.filter(v => (v / total) <= 0.5); top10 = (list.slice(0, 10).reduce((a, v) => a + v, 0) / total) * 100; }
+      const a = await rpc("getAsset", { id: mint });
+      const links = (a && a.content && a.content.links) || {}; const files = (a && a.content && a.content.files) || [];
+      image = image || links.image || (files[0] && (files[0].cdn_uri || files[0].uri)) || null;
+      tw = tw || links.twitter || null; tg = tg || links.telegram || null; web = web || links.website || links.external_url || null;
+      if (!(tw || tg || web)) {
+        const uri = a && a.content && a.content.json_uri;
+        if (uri) { try { const jr = await fetch(uri, { signal: AbortSignal.timeout(4000) }); if (jr.ok) { const jj = await jr.json(); const ex = jj.extensions || {}; tw = tw || jj.twitter || ex.twitter || null; tg = tg || jj.telegram || ex.telegram || null; web = web || jj.website || ex.website || null; image = image || jj.image || null; } } catch (_) {} }
+      }
+      social = !!(tw || tg || web);
     } catch (_) {}
-    try {
-      const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } });
-      holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null;
-    } catch (_) {}
+    // sirf agar social mila -> holders + top10 (heavy calls bachao)
+    if (social) {
+      try {
+        const sup = await rpc("getTokenSupply", [mint]);
+        const total = (sup && sup.value && Number(sup.value.uiAmount)) || 0;
+        const la = await rpc("getTokenLargestAccounts", [mint]);
+        let list = ((la && la.value) || []).map(x => Number(x.uiAmount) || 0);
+        if (total > 0) { list = list.filter(v => (v / total) <= 0.5); top10 = (list.slice(0, 10).reduce((a, v) => a + v, 0) / total) * 100; }
+      } catch (_) {}
+      try {
+        const ta = await rpc("getTokenAccounts", { mint, limit: 1000, options: { showZeroBalance: false } });
+        holders = (ta && ta.token_accounts && ta.token_accounts.length) || (ta && ta.total) || null;
+      } catch (_) {}
+    }
   }
 
   const cMcap = inRange;
