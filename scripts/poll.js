@@ -195,5 +195,5 @@ async function runPoll() {
   console.log("poll done");
 }
 
-module.exports = { runPoll, sb, tg, currentBal, tokenPrice, short };
+module.exports = { runPoll, sb, tg, currentBal, tokenPrice, short, rpc };
 if (require.main === module) runPoll();
